@@ -5,7 +5,7 @@ import (
 
 	"github.com/mitchellh/multistep"
 	"github.com/mitchellh/packer/packer"
-	xscommon "github.com/rdobson/packer-builder-xenserver/builder/xenserver/common"
+	xscommon "github.com/xenserverarmy/packer/builder/xenserver/common"
 )
 
 type stepCreateInstance struct {
@@ -62,9 +62,22 @@ func (self *stepCreateInstance) Run(state multistep.StateBag) multistep.StepActi
 		return multistep.ActionHalt
 	}
 
+	instance.SetVCpuMax(config.VMVCpus)
+	if err != nil {
+		ui.Error(fmt.Sprintf("Error setting maximum vcpus: %s", err.Error()))
+		return multistep.ActionHalt
+	}
+
+	instance.SetVCpuAtStartup(config.VMVCpus)
+	if err != nil {
+		ui.Error(fmt.Sprintf("Error setting startup vcpus: %s", err.Error()))
+		return multistep.ActionHalt
+	}
+
+
 	// Create VDI for the instance
 
-	sr, err := config.GetSR(client)
+	sr, err := config.GetSrByName(client, config.SrName)
 	if err != nil {
 		ui.Error(fmt.Sprintf("Unable to get SR: %s", err.Error()))
 		return multistep.ActionHalt
@@ -158,6 +171,25 @@ func (self *stepCreateInstance) Run(state multistep.StateBag) multistep.StepActi
 
 	state.Put("instance_uuid", instanceId)
 	ui.Say(fmt.Sprintf("Created instance '%s'", instanceId))
+
+	vdiId, err := vdi.GetUuid()
+	if err != nil {
+		ui.Error(fmt.Sprintf("Unable to get VM VDI UUID: %s", err.Error()))
+		return multistep.ActionHalt
+	}
+
+	state.Put("instance_vdi_uuid", vdiId)
+	ui.Say(fmt.Sprintf("Attached vdi '%s'", vdiId))
+
+	srId, err := sr.GetUuid()
+	if err != nil {
+		ui.Error(fmt.Sprintf("Unable to get VDI SR UUID: %s", err.Error()))
+		return multistep.ActionHalt
+	}
+
+	state.Put("instance_sr_uuid", srId)
+	ui.Say(fmt.Sprintf("Using SR '%s'", srId))
+
 
 	return multistep.ActionContinue
 }

@@ -39,11 +39,11 @@ IFS=$OLDIFS
 echo "==> Copying binaries for this platform..."
 DEV_PLATFORM="./pkg/$(go env GOOS)_$(go env GOARCH)"
 for F in $(find ${DEV_PLATFORM} -mindepth 1 -maxdepth 1 -type f); do
-    cp ${F} bin/
-    cp ${F} ${MAIN_GOPATH}/bin/
+    cp -v ${F} bin/
+    cp -v ${F} ${MAIN_GOPATH}/bin/
 done
 
 # Done!
 echo
 echo "==> Results:"
-ls -hl bin/
+ls -ahl bin/

@@ -637,6 +637,30 @@ func (self *VM) SetPlatform(params map[string]string) (err error) {
 	return
 }
 
+func (self *VM) SetVCpuMax( vcpus uint) (err error) {
+	result := APIResult{}
+	strVcpu := fmt.Sprintf("%d", vcpus)
+
+	err = self.Client.APICall(&result, "VM.set_set_VCPUs_max", self.Ref, strVcpu)
+
+	if err != nil {
+		return err
+	}
+	return
+}
+
+func (self *VM) SetVCpuAtStartup( vcpus uint) (err error) {
+	result := APIResult{}
+	strVcpu := fmt.Sprintf("%d", vcpus)
+
+	err = self.Client.APICall(&result, "VM.set_VCPUs_at_startup", self.Ref, strVcpu)
+
+	if err != nil {
+		return err
+	}
+	return
+}
+
 func (self *VM) ConnectNetwork(network *Network, device string) (vif *VIF, err error) {
 	// Create the VIF
 
@@ -702,6 +726,16 @@ func (self *SR) CreateVdi(name_label string, size int64) (vdi *VDI, err error) {
 	vdi.Client = self.Client
 
 	return
+}
+
+func (self *SR) GetUuid() (sr_uuid string, err error) {
+	result := APIResult{}
+	err = self.Client.APICall(&result, "SR.get_uuid", self.Ref)
+	if err != nil {
+		return "", err
+	}
+	sr_uuid = result.Value.(string)
+	return sr_uuid, nil
 }
 
 // Network associated functions

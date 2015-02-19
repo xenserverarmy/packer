@@ -7,6 +7,7 @@ import (
 	"github.com/mitchellh/multistep"
 	commonssh "github.com/mitchellh/packer/common/ssh"
 	"github.com/mitchellh/packer/communicator/ssh"
+	"github.com/mitchellh/packer/packer"
 	"io"
 	"log"
 	"net"
@@ -73,6 +74,58 @@ func doExecuteSSHCmd(cmd, target string, config *gossh.ClientConfig) (stdout str
 
 	return strings.Trim(b.String(), "\n"), nil
 }
+
+func doExecuteSSHCmds(state multistep.StateBag, cmds[] string, target string, config *gossh.ClientConfig) (stdout string, err error) {
+	ui := state.Get("ui").(packer.Ui)
+	client, err := gossh.Dial("tcp", target, config)
+	if err != nil {
+		ui.Error(fmt.Sprintf("Error connecting to host. '%s'.", err))
+		return "", err
+	}
+
+	var results bytes.Buffer
+
+	// running command set
+	for _, cmd := range cmds {
+		//Create session for this command
+		session, err := client.NewSession()
+		if err != nil {
+			ui.Error(fmt.Sprintf("Error creating SSH session on host. '%s'.", err))
+			return "", err
+		}
+
+		defer session.Close()
+
+		ui.Message(fmt.Sprintf("Running command: '%s'", cmd))
+		var b bytes.Buffer
+		var e bytes.Buffer
+		session.Stdout = &b
+		session.Stderr = &e
+		// run this command
+		if err := session.Run(cmd); err != nil {
+			ui.Error(fmt.Sprintf("Error running SSH command '%s'.", err))
+			ui.Error(fmt.Sprintf("stderr '%s'.", strings.Trim(e.String(), "\n")))
+			return "", err
+		}
+	
+		results.WriteString (b.String() + "\n")
+	}
+
+	return strings.Trim(results.String(), "\n"), nil
+}
+
+func ExecuteHostSSHCmds(state multistep.StateBag, cmds[] string) (stdout string, err error) {
+	config := state.Get("commonconfig").(CommonConfig)
+	// Setup connection config
+	sshConfig := &gossh.ClientConfig{
+		User: config.Username,
+		Auth: []gossh.AuthMethod{
+			gossh.Password(config.Password),
+		},
+	}
+	return doExecuteSSHCmds(state, cmds, config.HostIp + ":22", sshConfig)
+}
+
 
 func ExecuteHostSSHCmd(state multistep.StateBag, cmd string) (stdout string, err error) {
 	config := state.Get("commonconfig").(CommonConfig)

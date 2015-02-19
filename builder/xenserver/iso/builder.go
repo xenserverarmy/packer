@@ -4,30 +4,32 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"path"
-	"strings"
+//	"path"
 	"time"
 
 	"github.com/mitchellh/multistep"
 	"github.com/mitchellh/packer/common"
 	"github.com/mitchellh/packer/packer"
-	xscommon "github.com/rdobson/packer-builder-xenserver/builder/xenserver/common"
+	xscommon "github.com/xenserverarmy/packer/builder/xenserver/common"
 )
 
 type config struct {
 	common.PackerConfig   `mapstructure:",squash"`
 	xscommon.CommonConfig `mapstructure:",squash"`
 
-	VMMemory      uint   `mapstructure:"vm_memory"`
-	DiskSize      uint   `mapstructure:"disk_size"`
-	CloneTemplate string `mapstructure:"clone_template"`
+	VMMemory      uint    `mapstructure:"vm_memory"`
+	VMVCpus       uint    `mapstructure:"vm_vcpus"`
+	DiskSize      uint    `mapstructure:"disk_size"`
+	CloneTemplate string  `mapstructure:"clone_template"`
 
-	ISOChecksum     string   `mapstructure:"iso_checksum"`
-	ISOChecksumType string   `mapstructure:"iso_checksum_type"`
-	ISOUrls         []string `mapstructure:"iso_urls"`
+	ISOName       string  `mapstructure:"iso_name"`
+	ISOSRName     string  `mapstructure:"iso_sr"`
+	NfsMount	string	 `mapstructure:"nfs_mount"`
+
 	ISOUrl          string   `mapstructure:"iso_url"`
+	ScriptUrl       string   `mapstructure:"script_url"`
 
-	PlatformArgs map[string]string `mapstructure:"platform_args"`
+	PlatformArgs map[string] string `mapstructure:"platform_args"`
 
 	RawInstallTimeout string        `mapstructure:"install_timeout"`
 	InstallTimeout    time.Duration ``
@@ -54,8 +56,7 @@ func (self *Builder) Prepare(raws ...interface{}) (params []string, retErr error
 	self.config.tpl.UserVars = self.config.PackerUserVars
 
 	errs := common.CheckUnusedConfig(md)
-	errs = packer.MultiErrorAppend(
-		errs, self.config.CommonConfig.Prepare(self.config.tpl, &self.config.PackerConfig)...)
+	errs = packer.MultiErrorAppend( errs, self.config.CommonConfig.Prepare(self.config.tpl, &self.config.PackerConfig)...)
 
 	// Set default values
 
@@ -71,6 +72,10 @@ func (self *Builder) Prepare(raws ...interface{}) (params []string, retErr error
 		self.config.VMMemory = 1024
 	}
 
+	if self.config.VMVCpus == 0 {
+		self.config.VMVCpus = 1
+	}
+
 	if self.config.CloneTemplate == "" {
 		self.config.CloneTemplate = "Other install media"
 	}
@@ -83,23 +88,18 @@ func (self *Builder) Prepare(raws ...interface{}) (params []string, retErr error
 		pargs["apic"] = "true"
 		pargs["timeoffset"] = "0"
 		pargs["acpi"] = "1"
+		pargs["cores_per_socket"] = "1"
 		self.config.PlatformArgs = pargs
 	}
 
-	// Template substitution
-
+	// Template and environment substitution
 	templates := map[string]*string{
 		"clone_template":    &self.config.CloneTemplate,
 		"network_name":      &self.config.NetworkName,
-		"iso_checksum":      &self.config.ISOChecksum,
-		"iso_checksum_type": &self.config.ISOChecksumType,
+		"iso_name":          &self.config.ISOName,
 		"iso_url":           &self.config.ISOUrl,
 		"install_timeout":   &self.config.RawInstallTimeout,
 	}
-	for i := range self.config.ISOUrls {
-		templates[fmt.Sprintf("iso_urls[%d]", i)] = &self.config.ISOUrls[i]
-	}
-
 	for n, ptr := range templates {
 		var err error
 		*ptr, err = self.config.tpl.Process(*ptr, nil)
@@ -115,45 +115,21 @@ func (self *Builder) Prepare(raws ...interface{}) (params []string, retErr error
 		errs = packer.MultiErrorAppend(
 			errs, fmt.Errorf("Failed to parse install_timeout: %s", err))
 	}
-
-	if self.config.ISOChecksumType == "" {
+       
+       if self.config.ISOName == "" {
 		errs = packer.MultiErrorAppend(
-			errs, errors.New("The iso_checksum_type must be specified."))
-	} else {
-		self.config.ISOChecksumType = strings.ToLower(self.config.ISOChecksumType)
-		if self.config.ISOChecksumType != "none" {
-			if self.config.ISOChecksum == "" {
-				errs = packer.MultiErrorAppend(
-					errs, errors.New("Due to the file size being large, an iso_checksum is required."))
-			} else {
-				self.config.ISOChecksum = strings.ToLower(self.config.ISOChecksum)
-			}
-
-			if hash := common.HashForType(self.config.ISOChecksumType); hash == nil {
-				errs = packer.MultiErrorAppend(
-					errs, fmt.Errorf("Unsupported checksum type: %s", self.config.ISOChecksumType))
-			}
-
-		}
+			errs, errors.New("You must specify the ISO name"))
 	}
 
-	if len(self.config.ISOUrls) == 0 {
-		if self.config.ISOUrl == "" {
+	if self.config.ISOUrl != "" {
+	       if self.config.ScriptUrl == "" {
 			errs = packer.MultiErrorAppend(
-				errs, errors.New("One of iso_url or iso_urls must be specified."))
-		} else {
-			self.config.ISOUrls = []string{self.config.ISOUrl}
+			errs, errors.New("You must specify the URL of the copyiso script"))
 		}
-	} else if self.config.ISOUrl != "" {
-		errs = packer.MultiErrorAppend(
-			errs, errors.New("Only one of iso_url or iso_urls may be specified."))
-	}
 
-	for i, url := range self.config.ISOUrls {
-		self.config.ISOUrls[i], err = common.DownloadableURL(url)
-		if err != nil {
+	       if self.config.ISOSRName == "" {
 			errs = packer.MultiErrorAppend(
-				errs, fmt.Errorf("Failed to parse iso_urls[%d]: %s", i, err))
+			errs, errors.New("You must specify the SR for the ISO"))
 		}
 	}
 
@@ -188,18 +164,21 @@ func (self *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (pa
 
 	httpReqChan := make(chan string, 1)
 
+
 	//Build the steps
 	steps := []multistep.Step{
-		&common.StepDownload{
-			Checksum:     self.config.ISOChecksum,
-			ChecksumType: self.config.ISOChecksumType,
-			Description:  "ISO",
-			ResultKey:    "iso_path",
-			Url:          self.config.ISOUrls,
-		},
 		&xscommon.StepPrepareOutputDir{
 			Force: self.config.PackerForce,
 			Path:  self.config.OutputDir,
+		},
+		&xscommon.StepPrepareNfsExport{
+			NfsMount: self.config.NfsMount,
+		},
+		&xscommon.StepIsoDownload{
+			IsoName: self.config.ISOName,
+			SrName:  self.config.ISOSRName,
+			DlUrl:  self.config.ISOUrl,
+			ScriptUrl: self.config.ScriptUrl,
 		},
 		&common.StepCreateFloppy{
 			Files: self.config.FloppyFiles,
@@ -217,16 +196,13 @@ func (self *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (pa
 			},
 			VdiUuidKey: "floppy_vdi_uuid",
 		},
-		&xscommon.StepUploadVdi{
-			VdiName: path.Base(self.config.ISOUrls[0]),
-			ImagePathFunc: func() string {
-				return state.Get("iso_path").(string)
-			},
-			VdiUuidKey: "iso_vdi_uuid",
-		},
 		&xscommon.StepFindVdi{
 			VdiName:    self.config.ToolsIsoName,
 			VdiUuidKey: "tools_vdi_uuid",
+		},
+		&xscommon.StepFindVdi{
+			VdiName:    self.config.ISOName,
+			VdiUuidKey: "iso_vdi_uuid",
 		},
 		new(stepCreateInstance),
 		&xscommon.StepAttachVdi{
@@ -235,10 +211,6 @@ func (self *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (pa
 		},
 		&xscommon.StepAttachVdi{
 			VdiUuidKey: "iso_vdi_uuid",
-			VdiType:    xscommon.CD,
-		},
-		&xscommon.StepAttachVdi{
-			VdiUuidKey: "tools_vdi_uuid",
 			VdiType:    xscommon.CD,
 		},
 		new(xscommon.StepStartVmPaused),
@@ -254,6 +226,16 @@ func (self *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (pa
 		&xscommon.StepTypeBootCommand{
 			Tpl: self.config.tpl,
 		},
+		new(xscommon.StepWaitForShutdown),
+		&xscommon.StepDetachVdi{
+			VdiUuidKey: "iso_vdi_uuid",
+		},
+		&xscommon.StepAttachVdi{
+			VdiUuidKey: "tools_vdi_uuid",
+			VdiType:    xscommon.CD,
+		},
+		new(xscommon.StepStartVmPaused),
+		new(xscommon.StepBootWait),
 		&xscommon.StepWaitForIP{
 			Chan:    httpReqChan,
 			Timeout: self.config.InstallTimeout, // @todo change this
@@ -274,9 +256,6 @@ func (self *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (pa
 		&xscommon.StepDetachVdi{
 			VdiUuidKey: "floppy_vdi_uuid",
 		},
-		&xscommon.StepDetachVdi{
-			VdiUuidKey: "iso_vdi_uuid",
-		},
 		new(xscommon.StepStartVmPaused),
 		new(xscommon.StepBootWait),
 		&common.StepConnectSSH{
@@ -289,7 +268,9 @@ func (self *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (pa
 		&xscommon.StepDetachVdi{
 			VdiUuidKey: "tools_vdi_uuid",
 		},
-		new(xscommon.StepExport),
+		&xscommon.StepExport{
+			OutputFormat : self.config.Format,
+		},
 	}
 
 	self.runner = &multistep.BasicRunner{Steps: steps}

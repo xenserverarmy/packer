@@ -10,7 +10,9 @@ import (
 	"os"
 )
 
-type StepExport struct{}
+type StepExport struct {
+	OutputFormat string
+}
 
 func downloadFile(url, filename string) (err error) {
 
@@ -41,7 +43,7 @@ func downloadFile(url, filename string) (err error) {
 	return nil
 }
 
-func (StepExport) Run(state multistep.StateBag) multistep.StepAction {
+func (self *StepExport) Run(state multistep.StateBag) multistep.StepAction {
 	config := state.Get("commonconfig").(CommonConfig)
 	ui := state.Get("ui").(packer.Ui)
 	client := state.Get("client").(XenAPIClient)
@@ -55,9 +57,42 @@ func (StepExport) Run(state multistep.StateBag) multistep.StepAction {
 
 	ui.Say("Step: export artifact")
 
-	switch config.Format {
+	if self.OutputFormat == "" {
+		self.OutputFormat = config.Format
+	}
+
+	switch self.OutputFormat {
 	case "none":
 		ui.Say("Skipping export")
+		return multistep.ActionContinue
+
+	case "vhd":
+		export_filename := fmt.Sprintf("%s/%s.vhd", config.OutputDir, config.VMName)
+		source_filename := fmt.Sprintf("%s/nfs/%s/%s.vhd", config.OutputDir, state.Get("instance_sr_uuid").(string), state.Get("instance_vdi_uuid").(string))
+
+		ui.Say("Getting VHD " + source_filename)
+
+		// VM is stopped -- no writing issues on the VM unless someone starts it ;)
+		src, err := os.Open(source_filename)
+		if err != nil {
+			ui.Error(fmt.Sprintf("Could not open source VHD: %s", err.Error()))
+			return multistep.ActionHalt
+		}
+
+		defer src.Close() // make certain we don't lock
+		dst, err := os.Create(export_filename)
+		if err != nil {
+			ui.Error(fmt.Sprintf("Could not create destination VHD: %s", err.Error()))
+			return multistep.ActionHalt
+		}
+		if _, err := io.Copy(dst, src); err != nil {
+			dst.Close()
+			ui.Error(fmt.Sprintf("Error copying VHD: %s", err.Error()))
+			return multistep.ActionHalt
+		}
+		
+		dst.Close()
+
 		return multistep.ActionContinue
 
 	case "xva":
@@ -114,7 +149,7 @@ func (StepExport) Run(state multistep.StateBag) multistep.StepAction {
 		}
 
 	default:
-		panic(fmt.Sprintf("Unknown export format '%s'", config.Format))
+		panic(fmt.Sprintf("Unknown export format '%s'", self.OutputFormat ))
 	}
 
 	ui.Say("Download completed: " + config.OutputDir)
