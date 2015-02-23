@@ -31,7 +31,7 @@ Then follow the [instructions to build and install a development version of Pack
 Once you have installed Packer, you must compile this plugin and install the resulting binary.
 
 ```shell
-cd $GOROOT
+cd $GOPATH
 mkdir -p src/github.com/xenserverarmy/
 cd src/github.com/xenserverarmy
 git clone https://github.com/xenserverarmy/packer.git
