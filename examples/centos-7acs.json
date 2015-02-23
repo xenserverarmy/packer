@@ -16,7 +16,7 @@
       "iso_name": "CentOS-7.0-1406-x86_64-Minimal.iso",
       "iso_sr": "CIFS ISO library",	
       "script_url": "http://10.204.137.80/packer/xenserver/",
-      "output_directory": "centos-7-x86_64-xenserver-acs-minimal",
+      "output_directory": "/var/www/html/vhd",
       "format": "vhd",
       "shutdown_command": "",
       "ssh_username": "root",
@@ -62,5 +62,26 @@
 	  "type": "shell",
 	  "inline": ["/tmp/centos7-reset.sh"]
 	}
+  ],
+
+  "post-processors": [
+    {
+      	"type": "cloudstack-xenserver",
+      	"only": ["xenserver-iso"],
+	"apiurl": "http://10.204.146.18:8080/client/api",
+	"apikey": "QNgS1favp6l2XfAwanPMSHJBMqZqHtpz1ncSEt3HglPQtAC8H37ScvPoGmtKx2NILCvIf-TK_FobmTMWHsKF3w",
+	"secret": "zkXCTLihWzUEFsYgldeavldZvUZF0WO5J1l54JSVNK7qk5eb-G_0OtVL28YIw0sq9_NYvTj8RzEwElNy0j6bgQ",
+	"display_text": "A CentOS7 template with tools",
+	"template_name": "CentOS7",
+	"os_type": "Other CentOS (64-bit)",
+	"download_url": "http://10.204.137.80/vhd/packer-centos-7-x86_64-acs-minimal-template.vhd",
+	"zone": "Boston Test",
+	"account": "",
+	"domain": "",
+	"password_enabled": "true",
+	"ssh_enabled": "true",
+	"has_tools": "true",
+	"keep_input_artifact": true
+    }
   ]
 }
