@@ -1,6 +1,7 @@
-# XenServer Packer builder
+# XenServer Packer builder and post-processors
 
-This builder plugin extends packer to support building images for XenServer. 
+The builder plugin extends packer to support building images for XenServer. 
+The post-processor plug extends packer to support registration of XenServer images within various providers (Apache CloudStack for the moment)
 
 You can check out packer [here](https://packer.io).
 
@@ -8,6 +9,7 @@ You can check out packer [here](https://packer.io).
 ## Dependencies
 * Packer >= 0.7.2 (https://packer.io)
 * XenServer > 6.2 (http://xenserver.org)
+* Apache CloudStack > 4.2 (http://cloudstack.apache.org/) for ACS plugin
 * Golang (tested with 1.2.1) 
 
 
@@ -56,7 +58,7 @@ XC_OS="windows linux" XC_ARCH="386 amd64" make bin
 ```
 (instead of `make dev`) in the directory where you checked out Packer.
 
-## CentOS 7 Example
+## CentOS 7 Builder Example
 
 Once you've setup the above, you are good to go with an example. 
 
@@ -96,6 +98,41 @@ Once you've updated the config file with your own parameters, you can use packer
 packer build centos-7.json
 ```
 
+## Apache CloudStack Post-processor Example with CentOS 7
+
+Once you've setup the above, you are good to go with an example. 
+
+To get you started, there is an example config file which you can use:
+[`examples/centos-7acs.json`](https://github.com/xenserverarmy/packer/blob/master/examples/centos-7acs.json)
+
+The builder parameters are described in the CentOS 7 builder example.
+
+This example is functional, once suitable `apiurl`, `apikey` and `secret` configurations have been substituted.
+
+A brief explanation of what the config parameters mean:
+ * `type` - This is 'cloudstack-xenserver'
+ * `only` - This is 'xenserver-iso', since the output VHD is required.
+ * `apiurl` - The API endpoint for the CloudStack instance
+ * `apikey` - The API key to use for authentication
+ * `secret` - The API secret to use for authentication
+ * `display_text` - How the template should be described
+ * `template_name` - The name to assign to the template
+ * `os_type` - The name assigned to the CloudStack OS type for this template
+ * `download_url` - the url from which CloudStack should download the VHD artifact produced by the builder
+ * `zone` - The ability zone where the template will exist
+ * `account` - the name of the users account which will have the instance.  If blank, then the account associated with the apikey will be used
+ * `domain` - If account is specified, the domain must also be specified
+ * `password_enabled` - Set to 'true' if the CloudStack password management script is in the artifact
+ * `ssh_enabled` - Set to 'true' if the CloudStack SSH key script is in the artifact
+ * `has_tools` - Set to 'true' if the XenServer tools have been installed in the artifact
+
+Once you've updated the config file with your own parameters, you can use packer to build this VM, and upload it to your CloudStack instance with the following command:
+
+```
+packer build centos-7acs.json
+```
+
+
 ## Testing
 
-This code was built on CentOS 7 and has been tested with a stock XenServer 6.5.  There is no known limitation which would prevent its use with XenServer 6.2, or other Linux variants.
+This code was built on CentOS 7 and has been tested with a stock XenServer 6.5 and Apache CloudStack 4.3.  There is no known limitation which would prevent its use with XenServer 6.2, or other Linux variants.  The post-processor uses stable CloudStack APIs which should allow for its use on most CloudStack versions.
