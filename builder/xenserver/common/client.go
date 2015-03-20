@@ -28,6 +28,7 @@ type XenAPIObject struct {
 	Client *XenAPIClient
 }
 
+type Host XenAPIObject
 type VM XenAPIObject
 type SR XenAPIObject
 type VDI XenAPIObject
@@ -75,6 +76,12 @@ func (client *XenAPIClient) Login() (err error) {
 	params[1] = client.Password
 
 	err = client.RPCCall(&result, "session.login_with_password", params)
+	if err == nil {
+		// err might not be set properly, so check the reference
+		if result["Value"] == nil {
+			return errors.New ("Invalid credentials supplied")
+		}
+	}	
 	client.Session = result["Value"]
 	return err
 }
@@ -316,6 +323,40 @@ func (client *XenAPIClient) CreateTask() (task *Task, err error) {
 	return
 }
 
+func (client *XenAPIClient) CreateNetwork(name_label string, name_description string) (network *Network, err error) {
+	network = new(Network)
+
+	net_rec := make(xmlrpc.Struct)
+	net_rec["name_label"] = name_label
+	net_rec["name_description"] = name_description 
+	net_rec["bridge"] = ""
+	net_rec["other_config"] = make(xmlrpc.Struct)
+
+	fmt.Println ("foo")
+	result := APIResult{}
+	err = client.APICall(&result, "network.create", net_rec)
+	if err != nil {
+		return nil, err
+	}
+	network.Ref = result.Value.(string)
+	network.Client = client
+
+	return network, nil
+}
+
+// Host associated function
+
+func (self *Host) GetAddress() (address string, err error) {
+	result := APIResult{}
+	err = self.Client.APICall(&result, "host.get_address", self.Ref)
+	if err != nil {
+		return "", err
+	}
+	address = result.Value.(string)
+	return address, nil
+}
+
+
 // VM associated functions
 
 func (self *VM) Clone(label string) (new_instance *VM, err error) {
@@ -328,6 +369,32 @@ func (self *VM) Clone(label string) (new_instance *VM, err error) {
 	}
 	new_instance.Ref = result.Value.(string)
 	new_instance.Client = self.Client
+	return
+}
+
+func (self *VM) Copy (newName string, targetSr *SR) (new_instance *VM, err error) {
+	new_instance = new(VM)
+
+	result := APIResult{}
+	err = self.Client.APICall(&result, "VM.copy", self.Ref, newName, targetSr.Ref)
+	if err != nil {
+		return nil, err
+	}
+	new_instance.Ref = result.Value.(string)
+	new_instance.Client = self.Client
+	return
+}
+
+func (self *VM) Snapshot(label string) (snapshot *VM, err error) {
+	snapshot = new(VM)
+
+	result := APIResult{}
+	err = self.Client.APICall(&result, "VM.snapshot", self.Ref, label)
+	if err != nil {
+		return nil, err
+	}
+	snapshot.Ref = result.Value.(string)
+	snapshot.Client = self.Client
 	return
 }
 
@@ -376,6 +443,15 @@ func (self *VM) Unpause() (err error) {
 	return
 }
 
+func (self *VM) Resume(paused, force bool) (err error) {
+	result := APIResult{}
+	err = self.Client.APICall(&result, "VM.resume", self.Ref, paused, force)
+	if err != nil {
+		return err
+	}
+	return
+}
+
 func (self *VM) SetHVMBoot(policy, bootOrder string) (err error) {
 	result := APIResult{}
 	err = self.Client.APICall(&result, "VM.set_HVM_boot_policy", self.Ref, policy)
@@ -415,6 +491,21 @@ func (self *VM) GetDomainId() (domid string, err error) {
 	domid = result.Value.(string)
 	return domid, nil
 }
+
+func (self *VM) GetResidentOn() (host *Host, err error) {
+	result := APIResult{}
+	err = self.Client.APICall(&result, "VM.get_resident_on", self.Ref)
+	if err != nil {
+		return nil, err
+	}
+
+	host = new(Host)
+	host.Ref = result.Value.(string)
+	host.Client = self.Client
+
+	return host, nil
+}
+
 
 func (self *VM) GetPowerState() (state string, err error) {
 	result := APIResult{}
@@ -641,7 +732,7 @@ func (self *VM) SetVCpuMax( vcpus uint) (err error) {
 	result := APIResult{}
 	strVcpu := fmt.Sprintf("%d", vcpus)
 
-	err = self.Client.APICall(&result, "VM.set_set_VCPUs_max", self.Ref, strVcpu)
+	err = self.Client.APICall(&result, "VM.set_VCPUs_max", self.Ref, strVcpu)
 
 	if err != nil {
 		return err
@@ -693,6 +784,15 @@ func (self *VM) ConnectNetwork(network *Network, device string) (vif *VIF, err e
 func (self *VM) SetIsATemplate(is_a_template bool) (err error) {
 	result := APIResult{}
 	err = self.Client.APICall(&result, "VM.set_is_a_template", self.Ref, is_a_template)
+	if err != nil {
+		return err
+	}
+	return
+}
+
+func (self *VM) SetHaAlwaysRun(ha_always_run bool) (err error) {
+	result := APIResult{}
+	err = self.Client.APICall(&result, "VM.set_ha_always_run", self.Ref, ha_always_run)
 	if err != nil {
 		return err
 	}
@@ -752,6 +852,16 @@ func (self *Network) GetAssignedIPs() (ip_map map[string]string, err error) {
 	}
 	return ip_map, nil
 }
+
+func (self *Network) Destroy() (err error) {
+	result := APIResult{}
+	err = self.Client.APICall(&result, "network.destroy", self.Ref)
+	if err != nil {
+		return err
+	}
+	return
+}
+
 
 // PIF associated functions
 
@@ -846,6 +956,21 @@ func (self *VIF) Destroy() (err error) {
 		return err
 	}
 	return nil
+}
+
+func (self *VIF) GetNetwork() (network *Network, err error) {
+
+	network = new(Network)
+	result := APIResult{}
+	err = self.Client.APICall(&result, "VIF.get_network", self.Ref)
+
+	if err != nil {
+		return nil, err
+	}
+	network.Ref = result.Value.(string)
+	network.Client = self.Client
+	return
+
 }
 
 // VDI associated functions
