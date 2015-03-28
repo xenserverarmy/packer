@@ -127,6 +127,16 @@ func (p *PostProcessor) PostProcess(ui packer.Ui, artifact packer.Artifact) (pac
 		return nil, false, fmt.Errorf("No VHD artifact file found")
 	}
 
+	vmType := artifact.State("virtualizationType")
+	if vhd == "" {
+		return nil, false, fmt.Errorf("Virtualization type wasn't specified")
+	}
+
+	requiresHVM := "false"
+	if strings.ToLower(vmType.(string)) == "hvm" {
+		requiresHVM = "true"
+	}
+
 	ui.Message(fmt.Sprintf("Uploading %s to CloudStack", vhd))
 
 	// Create a new caching client
@@ -149,8 +159,8 @@ func (p *PostProcessor) PostProcess(ui packer.Ui, artifact packer.Artifact) (pac
 
 	ui.Say(fmt.Sprintf("Zone '%s' has id '%s'", p.config.Zone, zoneid))	
 
-	templateid, err := acs.Request("registerTemplate", fmt.Sprintf("displaytext:%s, ostypeid:%s, format:vhd, hypervisor:xenserver, name:%s, zoneid:%s, url:%s", 
-									p.config.DisplayText, ostypeid, p.config.TemplateName, zoneid, p.config.DownloadUrl))
+	templateid, err := acs.Request("registerTemplate", fmt.Sprintf("displaytext:%s, ostypeid:%s, format:vhd, hypervisor:xenserver, name:%s, zoneid:%s, url:%s, requireshvm:%s",
+									p.config.DisplayText, ostypeid, p.config.TemplateName, zoneid, p.config.DownloadUrl, requiresHVM))
 	if err != nil {
 		return nil, false, fmt.Errorf("Error registering template '%s': %s", p.config.TemplateName, err)
 	}
