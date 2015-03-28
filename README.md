@@ -69,8 +69,8 @@ The example is functional, once suitable `remote_host`, `remote_username` and `r
 
 A brief explanation of what the config parameters mean:
  * `type` - specifies the builder type. This is 'xenserver-iso', for installing
-   a VM from scratch, or 'xenserver-xva' to import existing XVA as a starting
-   point.
+   a VM from scratch, 'xenserver-xva' to import existing XVA as a starting
+   point, or 'xenserver-vm' to use a runnning VM as source
  * `remote_host` - the IP for the XenServer host being used.
  * `remote_username` - the username for the XenServer host being used.
  * `remote_password` - the password for the XenServer host being used.
@@ -97,6 +97,51 @@ Once you've updated the config file with your own parameters, you can use packer
 ```
 packer build centos-7.json
 ```
+
+## CentOS 7 Builder from running VM Example
+The idea behind using a running VM as a starting point is to test patching/conversion
+of existing infrastructure; without incurring downtime.  Using this builder, you can 
+clone, perform the tests on the clone until satisfied, and then apply them.  Source VM
+experiences no downtime, and there is no machine collision (if you pay attention). 
+
+To facilitate this process, the clone is launched on an internal network and then basic
+commands (contained in boot_command) are executed to provide a clean network which is 
+then used to copy in packer_clean.sh from the script location.  You modify that script 
+to do what you need to make your VM unique, and then have it perform a shutdown.  The
+remaining work you'd want to do to make the patch/update/convert/process/whatever the
+Vm is done using Packer Provisioners.
+
+To get you started, there is an example config file which you can use:
+[`examples/centos-7vm.json`](https://github.com/xenserverarmy/packer/blob/master/examples/centos-7vm.json)
+
+The example is functional, once suitable `remote_host`, `remote_username` and `remote_password` configurations have been substituted.
+
+A brief explanation of what the config parameters mean:
+ * `type` - specifies the builder type. This is 'xenserver-iso', for installing
+   a VM from scratch, or 'xenserver-xva' to import existing XVA as a starting
+   point.
+ * `remote_host` - the IP for the XenServer host being used.
+ * `remote_username` - the username for the XenServer host being used.
+ * `remote_password` - the password for the XenServer host being used.
+ * `boot_command` - a list of commands to be sent to the instance over XenServer VNC connection to VM. 
+ * `boot_wait` - how long to wait for the VM isntance to initially start
+ * `script_url` - the url from where XenServer Packer scripts are located
+ * `output_directory` - the path relative to 'packer build' that output will be located
+ * `format` - the output artifact type.  Valid values are 'vhd', 'vdi_raw', and 'xva'
+ * `shutdown_command` - reserved -- leave blank
+ * `ssh_username` - the username set by the installer for the instance; used for validation and in post-processors
+ * `ssh_password` - the password set by the installer for the instance; used for validation and in post-processors
+ * `sr_name` - the name of the SR for the VM instance.  For vhd artifacts, this must be NFS
+ * `vm_name` - the name that should be given to the created VM.
+ * `source_vm` - the name of the VM to clone and operate on
+ * `nfs_mount` - Used for VHD artifacts, the NFS mount for the sr_name
+
+Once you've updated the config file with your own parameters, you can use packer to build this VM with the following command:
+
+```
+packer build centos-7vm.json
+```
+
 
 ## Apache CloudStack Post-processor Example with CentOS 7
 
