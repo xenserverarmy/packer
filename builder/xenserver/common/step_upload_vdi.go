@@ -7,6 +7,8 @@ import (
 	"log"
 	"os"
 	"time"
+
+	xsclient "github.com/xenserverarmy/go-xenserver-client"
 )
 
 type StepUploadVdi struct {
@@ -18,7 +20,7 @@ type StepUploadVdi struct {
 func (self *StepUploadVdi) Run(state multistep.StateBag) multistep.StepAction {
 	config := state.Get("commonconfig").(CommonConfig)
 	ui := state.Get("ui").(packer.Ui)
-	client := state.Get("client").(XenAPIClient)
+	client := state.Get("client").(xsclient.XenAPIClient)
 
 	imagePath := self.ImagePathFunc()
 	if imagePath == "" {
@@ -80,7 +82,7 @@ func (self *StepUploadVdi) Run(state multistep.StateBag) multistep.StepAction {
 func (self *StepUploadVdi) Cleanup(state multistep.StateBag) {
 	config := state.Get("commonconfig").(CommonConfig)
 	ui := state.Get("ui").(packer.Ui)
-	client := state.Get("client").(XenAPIClient)
+	client := state.Get("client").(xsclient.XenAPIClient)
 
 	if config.ShouldKeepVM(state) {
 		return

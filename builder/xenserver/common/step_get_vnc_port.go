@@ -13,9 +13,10 @@ func (self *StepGetVNCPort) Run(state multistep.StateBag) multistep.StepAction {
 	ui := state.Get("ui").(packer.Ui)
 
 	ui.Say("Step: forward the instances VNC port over SSH")
-
 	domid := state.Get("domid").(string)
 	cmd := fmt.Sprintf("xenstore-read /local/domain/%s/console/vnc-port", domid)
+
+	ui.Message(fmt.Sprintf("Finding vnc-port for domain '%s'", domid))
 
 	remote_vncport, err := ExecuteHostSSHCmd(state, cmd)
 	if err != nil {

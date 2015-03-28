@@ -7,9 +7,13 @@ import (
 	"github.com/mitchellh/packer/packer"
 	"log"
 	"time"
+
+	xsclient "github.com/xenserverarmy/go-xenserver-client"
 )
 
-type StepStartOnHIMN struct{}
+type StepStartOnHIMN struct{
+	PingTest	bool
+}
 
 /*
  * This step starts the installed guest on the Host Internal Management Network
@@ -22,7 +26,7 @@ type StepStartOnHIMN struct{}
 func (self *StepStartOnHIMN) Run(state multistep.StateBag) multistep.StepAction {
 
 	ui := state.Get("ui").(packer.Ui)
-	client := state.Get("client").(XenAPIClient)
+	client := state.Get("client").(xsclient.XenAPIClient)
 
 	ui.Say("Step: Start VM on the Host Internal Mangement Network")
 
@@ -46,79 +50,92 @@ func (self *StepStartOnHIMN) Run(state multistep.StateBag) multistep.StepAction 
 	// Create a VIF for the HIMN
 	himn_vif, err := instance.ConnectNetwork(himn, "0")
 	if err != nil {
-		ui.Error("Error creating VIF")
-		ui.Error(err.Error())
+		ui.Error(fmt.Sprintf("Error creating HIMN VIF : %s", err.Error()))
 		return multistep.ActionHalt
 	}
 
 	// Start the VM
-	instance.Start(false, false)
-
-	var himn_iface_ip string = ""
-
-	// Obtain the allocated IP
-	err = InterruptibleWait{
-		Predicate: func() (found bool, err error) {
-			ips, err := himn.GetAssignedIPs()
-			if err != nil {
-				return false, fmt.Errorf("Can't get assigned IPs: %s", err.Error())
-			}
-			log.Printf("IPs: %s", ips)
-			log.Printf("Ref: %s", instance.Ref)
-
-			//Check for instance.Ref in map
-			if vm_ip, ok := ips[himn_vif.Ref]; ok && vm_ip != "" {
-				ui.Say("Found the VM's IP: " + vm_ip)
-				himn_iface_ip = vm_ip
-				return true, nil
-			}
-
-			ui.Say("Wait for IP address...")
-			return false, nil
-		},
-		PredicateInterval: 10 * time.Second,
-		Timeout:           100 * time.Second,
-	}.Wait(state)
-
+	err = instance.Start(false, false)
 	if err != nil {
-		ui.Error(fmt.Sprintf("Unable to find an IP on the Host-internal management interface: %s", err.Error()))
+		ui.Error(fmt.Sprintf("Unable to start VM with UUID '%s': %s", uuid, err.Error()))
 		return multistep.ActionHalt
 	}
 
-	state.Put("himn_ssh_address", himn_iface_ip)
-	ui.Say("Stored VM's IP " + himn_iface_ip)
+	err = FindResidentHost ( state, instance, uuid )
+	if err != nil {
+		ui.Error(fmt.Sprintf("Unable to find the host VM '%s' is on: %s", uuid, err.Error()))
+		return multistep.ActionHalt
+	}
 
-	// Wait for the VM to boot, and check we can ping this interface
+	if self.PingTest {
 
-	ping_cmd := fmt.Sprintf("ping -c 1 %s", himn_iface_ip)
+		var himn_iface_ip string = ""
 
-	err = InterruptibleWait{
-		Predicate: func() (success bool, err error) {
-			ui.Message(fmt.Sprintf("Attempting to ping interface: %s", ping_cmd))
-			_, err = ExecuteHostSSHCmd(state, ping_cmd)
+		// Obtain the allocated IP
+		err = InterruptibleWait{
+			Predicate: func() (found bool, err error) {
+				ips, err := himn.GetAssignedIPs()
+				if err != nil {
+					return false, fmt.Errorf("Can't get assigned IPs: %s", err.Error())
+				}
+				log.Printf("IPs: %s", ips)
+				log.Printf("Ref: %s", instance.Ref)
 
-			switch err.(type) {
-			case nil:
-				// ping succeeded
-				return true, nil
-			case *gossh.ExitError:
-				// ping failed, try again
+				//Check for instance.Ref in map
+				if vm_ip, ok := ips[himn_vif.Ref]; ok && vm_ip != "" {
+					ui.Say("Found the VM's IP: " + vm_ip)
+					himn_iface_ip = vm_ip
+					return true, nil
+				}
+
+				ui.Say("Wait for IP address...")
 				return false, nil
-			default:
-				// unknown error
-				return false, err
-			}
-		},
-		PredicateInterval: 10 * time.Second,
-		Timeout:           300 * time.Second,
-	}.Wait(state)
+			},
+			PredicateInterval: 10 * time.Second,
+			Timeout:           100 * time.Second,
+		}.Wait(state)
 
-	if err != nil {
-		ui.Error(fmt.Sprintf("Unable to ping interface. (Has the VM not booted?): %s", err.Error()))
-		return multistep.ActionHalt
+		if err != nil {
+			ui.Error(fmt.Sprintf("Unable to find an IP on the Host-internal management interface: %s", err.Error()))
+			return multistep.ActionHalt
+		}
+
+		state.Put("himn_ssh_address", himn_iface_ip)
+		ui.Say("Stored VM's IP " + himn_iface_ip)
+
+		// Wait for the VM to boot, and check we can ping this interface
+
+		ping_cmd := fmt.Sprintf("ping -c 1 %s", himn_iface_ip)
+
+		err = InterruptibleWait{
+			Predicate: func() (success bool, err error) {
+				ui.Message(fmt.Sprintf("Attempting to ping interface: %s", ping_cmd))
+				_, err = ExecuteHostSSHCmd(state, ping_cmd)
+
+				switch err.(type) {
+				case nil:
+					// ping succeeded
+					return true, nil
+				case *gossh.ExitError:
+					// ping failed, try again
+					return false, nil
+				default:
+					// unknown error
+					return false, err
+				}
+			},
+			PredicateInterval: 10 * time.Second,
+			Timeout:           300 * time.Second,
+		}.Wait(state)
+
+		if err != nil {
+			ui.Error(fmt.Sprintf("Unable to ping interface. (Has the VM not booted?): %s", err.Error()))
+			return multistep.ActionHalt
+		}
+
+		ui.Message("Ping success! Continuing...")
 	}
 
-	ui.Message("Ping success! Continuing...")
 	return multistep.ActionContinue
 
 }

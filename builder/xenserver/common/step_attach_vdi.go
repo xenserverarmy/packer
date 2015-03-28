@@ -5,18 +5,20 @@ import (
 	"github.com/mitchellh/multistep"
 	"github.com/mitchellh/packer/packer"
 	"log"
+
+	xsclient "github.com/xenserverarmy/go-xenserver-client"
 )
 
 type StepAttachVdi struct {
 	VdiUuidKey string
-	VdiType    VDIType
+	VdiType    xsclient.VDIType
 
-	vdi *VDI
+	vdi *xsclient.VDI
 }
 
 func (self *StepAttachVdi) Run(state multistep.StateBag) multistep.StepAction {
 	ui := state.Get("ui").(packer.Ui)
-	client := state.Get("client").(XenAPIClient)
+	client := state.Get("client").(xsclient.XenAPIClient)
 
 	var vdiUuid string
 	if vdiUuidRaw, ok := state.GetOk(self.VdiUuidKey); ok {
@@ -53,7 +55,7 @@ func (self *StepAttachVdi) Run(state multistep.StateBag) multistep.StepAction {
 
 func (self *StepAttachVdi) Cleanup(state multistep.StateBag) {
 	config := state.Get("commonconfig").(CommonConfig)
-	client := state.Get("client").(XenAPIClient)
+	client := state.Get("client").(xsclient.XenAPIClient)
 	if config.ShouldKeepVM(state) {
 		return
 	}

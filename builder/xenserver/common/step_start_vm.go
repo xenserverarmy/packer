@@ -9,14 +9,14 @@ import (
 	xsclient "github.com/xenserverarmy/go-xenserver-client"
 )
 
-type StepStartVmPaused struct{}
+type StepStartVm struct{}
 
-func (self *StepStartVmPaused) Run(state multistep.StateBag) multistep.StepAction {
+func (self *StepStartVm) Run(state multistep.StateBag) multistep.StepAction {
 
 	client := state.Get("client").(xsclient.XenAPIClient)
 	ui := state.Get("ui").(packer.Ui)
 
-	ui.Say("Step: Start VM Paused")
+	ui.Say("Step: Start VM")
 
 	uuid := state.Get("instance_uuid").(string)
 	instance, err := client.GetVMByUuid(uuid)
@@ -25,14 +25,7 @@ func (self *StepStartVmPaused) Run(state multistep.StateBag) multistep.StepActio
 		return multistep.ActionHalt
 	}
 
-	// note that here "cd" means boot from hard drive ('c') first, then CDROM ('d')
-	err = instance.SetHVMBoot("BIOS order", "cd")
-	if err != nil {
-		ui.Error(fmt.Sprintf("Unable to set HVM boot params: %s", err.Error()))
-		return multistep.ActionHalt
-	}
-
-	err = instance.Start(true, false)
+	err = instance.Start(false, false)
 	if err != nil {
 		ui.Error(fmt.Sprintf("Unable to start VM with UUID '%s': %s", uuid, err.Error()))
 		return multistep.ActionHalt
@@ -47,7 +40,7 @@ func (self *StepStartVmPaused) Run(state multistep.StateBag) multistep.StepActio
 	return multistep.ActionContinue
 }
 
-func (self *StepStartVmPaused) Cleanup(state multistep.StateBag) {
+func (self *StepStartVm) Cleanup(state multistep.StateBag) {
 	config := state.Get("commonconfig").(CommonConfig)
 	client := state.Get("client").(xsclient.XenAPIClient)
 

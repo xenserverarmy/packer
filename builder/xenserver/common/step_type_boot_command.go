@@ -41,6 +41,7 @@ func (self *StepTypeBootCommand) Run(state multistep.StateBag) multistep.StepAct
 	// Connect to the local VNC port as we have set up a SSH port forward
 	ui.Say("Connecting to the VM over VNC")
 	ui.Message(fmt.Sprintf("Using local port: %d", vnc_port))
+
 	net_conn, err := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", vnc_port))
 
 	if err != nil {
@@ -55,6 +56,7 @@ func (self *StepTypeBootCommand) Run(state multistep.StateBag) multistep.StepAct
 	c, err := vnc.Client(net_conn, &vnc.ClientConfig{Exclusive: true})
 
 	if err != nil {
+
 		err := fmt.Errorf("Error establishing VNC session: %s", err)
 		state.Put("error", err)
 		ui.Error(err.Error())
@@ -63,7 +65,7 @@ func (self *StepTypeBootCommand) Run(state multistep.StateBag) multistep.StepAct
 
 	defer c.Close()
 
-	log.Printf("Connected to the VNC console: %s", c.DesktopName)
+	ui.Message(fmt.Sprintf("Connected to the VNC console: %s", c.DesktopName))
 
 	// find local ip
 	envVar, err := ExecuteHostSSHCmd(state, "echo $SSH_CLIENT")
@@ -76,7 +78,7 @@ func (self *StepTypeBootCommand) Run(state multistep.StateBag) multistep.StepAct
 		return multistep.ActionHalt
 	}
 	localIp := strings.Split(envVar, " ")[0]
-	ui.Message(fmt.Sprintf("Found local IP: %s", localIp))
+	ui.Message(fmt.Sprintf("Echo found local IP: %s", localIp))
 
 	tplData := &bootCommandTemplateData{
 		config.VMName,

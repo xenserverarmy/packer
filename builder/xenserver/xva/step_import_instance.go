@@ -7,16 +7,18 @@ import (
 	"github.com/mitchellh/multistep"
 	"github.com/mitchellh/packer/packer"
 	xscommon "github.com/xenserverarmy/packer/builder/xenserver/common"
+
+	xsclient "github.com/xenserverarmy/go-xenserver-client"
 )
 
 type stepImportInstance struct {
-	instance *xscommon.VM
-	vdi      *xscommon.VDI
+	instance *xsclient.VM
+	vdi      *xsclient.VDI
 }
 
 func (self *stepImportInstance) Run(state multistep.StateBag) multistep.StepAction {
 
-	client := state.Get("client").(xscommon.XenAPIClient)
+	client := state.Get("client").(xsclient.XenAPIClient)
 	config := state.Get("config").(config)
 	ui := state.Get("ui").(packer.Ui)
 
@@ -50,7 +52,7 @@ func (self *stepImportInstance) Run(state multistep.StateBag) multistep.StepActi
 		return multistep.ActionHalt
 	}
 
-	instance := xscommon.VM(*result)
+	instance := xsclient.VM(*result)
 
 	/*
 		err = instance.SetStaticMemoryRange(config.VMMemory*1024*1024, config.VMMemory*1024*1024)
@@ -141,6 +143,15 @@ func (self *stepImportInstance) Run(state multistep.StateBag) multistep.StepActi
 	}
 
 	state.Put("instance_uuid", instanceId)
+
+	bootOrder, err := instance.GetHVMBootPolicy()
+	if err != nil {
+		ui.Error(fmt.Sprintf("Unable to determine if VM is HVM or PV: %s", err.Error()))
+		return multistep.ActionHalt
+	}
+	
+	state.Put("virtualization_type", bootOrder)
+
 	ui.Say(fmt.Sprintf("Imported instance '%s'", instanceId))
 
 	return multistep.ActionContinue

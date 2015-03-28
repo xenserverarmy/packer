@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+
+	xsclient "github.com/xenserverarmy/go-xenserver-client"
 )
 
 type StepExport struct {
@@ -46,10 +48,12 @@ func downloadFile(url, filename string) (err error) {
 func (self *StepExport) Run(state multistep.StateBag) multistep.StepAction {
 	config := state.Get("commonconfig").(CommonConfig)
 	ui := state.Get("ui").(packer.Ui)
-	client := state.Get("client").(XenAPIClient)
+	client := state.Get("client").(xsclient.XenAPIClient)
 	instance_uuid := state.Get("instance_uuid").(string)
 	suffix := ".vhd" 
 	extrauri := "&format=vhd" 
+
+	exportFiles := make([]string, 0, 1) 
 
 	instance, err := client.GetVMByUuid(instance_uuid)
 	if err != nil {
@@ -69,33 +73,48 @@ func (self *StepExport) Run(state multistep.StateBag) multistep.StepAction {
 		return multistep.ActionContinue
 
 	case "vhd":
-		export_filename := fmt.Sprintf("%s/%s.vhd", config.OutputDir, config.VMName)
-		source_filename := fmt.Sprintf("%s/nfs/%s/%s.vhd", config.OutputDir, state.Get("instance_sr_uuid").(string), state.Get("instance_vdi_uuid").(string))
 
-		ui.Say("Getting VHD " + source_filename)
-
-		// VM is stopped -- no writing issues on the VM unless someone starts it ;)
-		src, err := os.Open(source_filename)
+		disks, err := instance.GetDisks()
 		if err != nil {
-			ui.Error(fmt.Sprintf("Could not open source VHD: %s", err.Error()))
+			ui.Error(fmt.Sprintf("Could not get VM disks: %s", err.Error()))
 			return multistep.ActionHalt
 		}
 
-		defer src.Close() // make certain we don't lock
-		dst, err := os.Create(export_filename)
-		if err != nil {
-			ui.Error(fmt.Sprintf("Could not create destination VHD: %s", err.Error()))
-			return multistep.ActionHalt
-		}
-		if _, err := io.Copy(dst, src); err != nil {
-			dst.Close()
-			ui.Error(fmt.Sprintf("Error copying VHD: %s", err.Error()))
-			return multistep.ActionHalt
-		}
+		for i, disk := range disks {
+			disk_uuid, err := disk.GetUuid()
+			if err != nil {
+				ui.Error(fmt.Sprintf("Could not get disk %d with UUID '%s': %s", i, disk_uuid, err.Error()))
+				return multistep.ActionHalt
+			}
+
+			export_filename := fmt.Sprintf("%s/%s.%d.vhd", config.OutputDir, config.VMName, i)
+			source_filename := fmt.Sprintf("%s/nfs/%s/%s.vhd", config.OutputDir, state.Get("instance_sr_uuid").(string), disk_uuid)
+
+			ui.Say("Getting VHD " + source_filename)
+
+			// VM is stopped -- no writing issues on the VM unless someone starts it ;)
+			src, err := os.Open(source_filename)
+			if err != nil {
+				ui.Error(fmt.Sprintf("Could not open source VHD: %s", err.Error()))
+				return multistep.ActionHalt
+			}
+
+			defer src.Close() // make certain we don't lock
+			dst, err := os.Create(export_filename)
+			if err != nil {
+				ui.Error(fmt.Sprintf("Could not create destination VHD: %s", err.Error()))
+				return multistep.ActionHalt
+			}
+			if _, err := io.Copy(dst, src); err != nil {
+				dst.Close()
+				ui.Error(fmt.Sprintf("Error copying VHD: %s", err.Error()))
+				return multistep.ActionHalt
+			}
+
+			exportFiles = append(exportFiles , export_filename)
 		
-		dst.Close()
-
-		return multistep.ActionContinue
+			dst.Close()
+		}
 
 	case "xva":
 		// export the VM
@@ -115,6 +134,7 @@ func (self *StepExport) Run(state multistep.StateBag) multistep.StepAction {
 			return multistep.ActionHalt
 		}
 
+		exportFiles = append(exportFiles , export_filename)
 
 	case "vdi_raw":
 	       suffix = ".raw" 
@@ -153,11 +173,15 @@ func (self *StepExport) Run(state multistep.StateBag) multistep.StepAction {
 				ui.Error(fmt.Sprintf("Could not download VDI: %s", err.Error()))
 				return multistep.ActionHalt
 			}
+
+			exportFiles = append(exportFiles , disk_export_filename)
 		}
 
 	default:
 		panic(fmt.Sprintf("Unknown export format '%s'", self.OutputFormat ))
 	}
+
+	state.Put("export_files", exportFiles)
 
 	ui.Say("Download completed: " + config.OutputDir)
 

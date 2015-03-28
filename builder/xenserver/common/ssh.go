@@ -116,6 +116,9 @@ func doExecuteSSHCmds(state multistep.StateBag, cmds[] string, target string, co
 
 func ExecuteHostSSHCmds(state multistep.StateBag, cmds[] string) (stdout string, err error) {
 	config := state.Get("commonconfig").(CommonConfig)
+
+	//ui := state.Get("ui").(packer.Ui)
+	//ui.Message (fmt.Sprintf("connecting to %s", config.HostIp))
 	// Setup connection config
 	sshConfig := &gossh.ClientConfig{
 		User: config.Username,

@@ -5,6 +5,8 @@ import (
 	"github.com/mitchellh/multistep"
 	"github.com/mitchellh/packer/packer"
 	"time"
+
+	xsclient "github.com/xenserverarmy/go-xenserver-client"
 )
 
 type StepShutdown struct{}
@@ -12,7 +14,7 @@ type StepShutdown struct{}
 func (StepShutdown) Run(state multistep.StateBag) multistep.StepAction {
 	config := state.Get("commonconfig").(CommonConfig)
 	ui := state.Get("ui").(packer.Ui)
-	client := state.Get("client").(XenAPIClient)
+	client := state.Get("client").(xsclient.XenAPIClient)
 	instance_uuid := state.Get("instance_uuid").(string)
 
 	instance, err := client.GetVMByUuid(instance_uuid)

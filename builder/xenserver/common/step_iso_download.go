@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"github.com/mitchellh/multistep"
 	"github.com/mitchellh/packer/packer"
+
+	xsclient "github.com/xenserverarmy/go-xenserver-client"
 )
 
 type StepIsoDownload struct {
@@ -17,7 +19,7 @@ type StepIsoDownload struct {
 func (self *StepIsoDownload) Run(state multistep.StateBag) multistep.StepAction {
 	config := state.Get("commonconfig").(CommonConfig)
 	ui := state.Get("ui").(packer.Ui)
-	client := state.Get("client").(XenAPIClient)
+	client := state.Get("client").(xsclient.XenAPIClient)
 
 	ui.Say("Downloading ISO " + self.IsoName)
 	// first step is to find out if the ISO already exists in the SR
@@ -61,11 +63,6 @@ func (self *StepIsoDownload) Run(state multistep.StateBag) multistep.StepAction 
 		"chmod +x ./copyiso.sh",
 		fmt.Sprintf ( "./copyiso.sh '%s' '%s' '%s' ", self.SrName, self.IsoName, self.DlUrl ),
 		"rm -f ./copyiso.sh" }
-
-	//cmds[0] = fmt.Sprintf ("wget %scopyiso.sh", self.ScriptUrl)
-	//cmds[1] = "chmod +x ./copyiso.sh"
-	//cmds[2] = "./copyiso.sh"
-	//cmds[3] = "rm -y ./copyiso.sh"
 
 	_, err := ExecuteHostSSHCmds (state, cmds )
 	if err != nil {
