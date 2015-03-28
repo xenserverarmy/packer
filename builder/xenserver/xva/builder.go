@@ -10,6 +10,8 @@ import (
 	"github.com/mitchellh/packer/common"
 	"github.com/mitchellh/packer/packer"
 	xscommon "github.com/xenserverarmy/packer/builder/xenserver/common"
+
+	xsclient "github.com/xenserverarmy/go-xenserver-client"
 )
 
 type config struct {
@@ -94,7 +96,7 @@ func (self *Builder) Prepare(raws ...interface{}) (params []string, retErr error
 
 func (self *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (packer.Artifact, error) {
 	//Setup XAPI client
-	client := xscommon.NewXenAPIClient(self.config.HostIp, self.config.Username, self.config.Password)
+	client := xsclient.NewXenAPIClient(self.config.HostIp, self.config.Username, self.config.Password)
 
 	err := client.Login()
 	if err != nil {
@@ -142,11 +144,11 @@ func (self *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (pa
 		new(stepImportInstance),
 		&xscommon.StepAttachVdi{
 			VdiUuidKey: "floppy_vdi_uuid",
-			VdiType:    xscommon.Floppy,
+			VdiType:    xsclient.Floppy,
 		},
 		&xscommon.StepAttachVdi{
 			VdiUuidKey: "tools_vdi_uuid",
-			VdiType:    xscommon.CD,
+			VdiType:    xsclient.CD,
 		},
 		new(xscommon.StepStartVmPaused),
 		new(xscommon.StepGetVNCPort),
@@ -203,7 +205,14 @@ func (self *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (pa
 		return nil, errors.New("Build was halted.")
 	}
 
-	artifact, _ := xscommon.NewArtifact(self.config.OutputDir)
+	artifactState := make(map[string]interface{})
+	if len(state.Get("virtualization_type").(string)) == 0 {
+		artifactState["virtualizationType"] = "PV"
+	} else {
+		artifactState["virtualizationType"] = "HVM"
+	}
+
+	artifact, _ := xscommon.NewArtifact(self.config.OutputDir, artifactState, state.Get("export_files").([]string))
 
 	return artifact, nil
 }

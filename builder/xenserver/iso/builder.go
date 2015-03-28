@@ -11,6 +11,8 @@ import (
 	"github.com/mitchellh/packer/common"
 	"github.com/mitchellh/packer/packer"
 	xscommon "github.com/xenserverarmy/packer/builder/xenserver/common"
+
+	xsclient "github.com/xenserverarmy/go-xenserver-client"
 )
 
 type config struct {
@@ -143,7 +145,7 @@ func (self *Builder) Prepare(raws ...interface{}) (params []string, retErr error
 
 func (self *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (packer.Artifact, error) {
 	//Setup XAPI client
-	client := xscommon.NewXenAPIClient(self.config.HostIp, self.config.Username, self.config.Password)
+	client := xsclient.NewXenAPIClient(self.config.HostIp, self.config.Username, self.config.Password)
 
 	err := client.Login()
 	if err != nil {
@@ -207,11 +209,11 @@ func (self *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (pa
 		new(stepCreateInstance),
 		&xscommon.StepAttachVdi{
 			VdiUuidKey: "floppy_vdi_uuid",
-			VdiType:    xscommon.Floppy,
+			VdiType:    xsclient.Floppy,
 		},
 		&xscommon.StepAttachVdi{
 			VdiUuidKey: "iso_vdi_uuid",
-			VdiType:    xscommon.CD,
+			VdiType:    xsclient.CD,
 		},
 		new(xscommon.StepStartVmPaused),
 		new(xscommon.StepGetVNCPort),
@@ -232,15 +234,15 @@ func (self *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (pa
 		},
 		&xscommon.StepAttachVdi{
 			VdiUuidKey: "tools_vdi_uuid",
-			VdiType:    xscommon.CD,
+			VdiType:    xsclient.CD,
 		},
 		new(xscommon.StepStartVmPaused),
 		new(xscommon.StepBootWait),
-		&xscommon.StepWaitForIP{
+		&xscommon.StepWaitForIP{ // do this again as could have new host and IP
 			Chan:    httpReqChan,
 			Timeout: self.config.InstallTimeout, // @todo change this
 		},
-		&xscommon.StepForwardPortOverSSH{
+		&xscommon.StepForwardPortOverSSH{ 
 			RemotePort:  xscommon.InstanceSSHPort,
 			RemoteDest:  xscommon.InstanceSSHIP,
 			HostPortMin: self.config.HostPortMin,
@@ -258,6 +260,17 @@ func (self *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (pa
 		},
 		new(xscommon.StepStartVmPaused),
 		new(xscommon.StepBootWait),
+		&xscommon.StepWaitForIP{ // do this again as could have new host and IP
+			Chan:    httpReqChan,
+			Timeout: self.config.InstallTimeout, // @todo change this
+		},
+		&xscommon.StepForwardPortOverSSH{
+			RemotePort:  xscommon.InstanceSSHPort,
+			RemoteDest:  xscommon.InstanceSSHIP,
+			HostPortMin: self.config.HostPortMin,
+			HostPortMax: self.config.HostPortMax,
+			ResultKey:   "local_ssh_port",
+		},
 		&common.StepConnectSSH{
 			SSHAddress:     xscommon.SSHLocalAddress,
 			SSHConfig:      xscommon.SSHConfig,
@@ -288,7 +301,18 @@ func (self *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (pa
 		return nil, errors.New("Build was halted.")
 	}
 
-	artifact, _ := xscommon.NewArtifact(self.config.OutputDir)
+	artifactState := make(map[string]interface{})
+	if len(state.Get("virtualization_type").(string)) == 0 {
+		artifactState["virtualizationType"] = "PV"
+	} else {
+		artifactState["virtualizationType"] = "HVM"
+	}
+
+	artifactState["diskSize"] = fmt.Sprintf( "%d", self.config.DiskSize)
+	artifactState["ramSize"] = fmt.Sprintf( "%d", self.config.VMMemory )
+	artifactState["vm_name"] = self.config.VMName
+
+	artifact, _ := xscommon.NewArtifact(self.config.OutputDir, artifactState, state.Get("export_files").([]string))
 
 	return artifact, nil
 }
