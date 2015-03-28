@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/mitchellh/packer/packer"
 	"os"
-	"path/filepath"
 )
 
 // This is the common builder ID to all of these artifacts.
@@ -13,23 +12,14 @@ const BuilderId = "packer.xenserver"
 type LocalArtifact struct {
 	dir string
 	f   []string
+	state map[string]interface{}
 }
 
-func NewArtifact(dir string) (packer.Artifact, error) {
-	files := make([]string, 0, 1)
-	visit := func(path string, info os.FileInfo, err error) error {
-		if !info.IsDir() {
-			files = append(files, path)
-		}
-		return err
-	}
-	if err := filepath.Walk(dir, visit); err != nil {
-		return nil, err
-	}
-
+func NewArtifact(dir string, state map[string]interface{}, files []string) (packer.Artifact, error) {
 	return &LocalArtifact{
 		dir: dir,
 		f:   files,
+		state: state,
 	}, nil
 }
 
@@ -50,7 +40,7 @@ func (a *LocalArtifact) String() string {
 }
 
 func (a *LocalArtifact) State(name string) interface{} {
-	return nil
+	return a.state[name]
 }
 
 func (a *LocalArtifact) Destroy() error {
