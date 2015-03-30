@@ -8,7 +8,11 @@ import (
 	"strings"
 	"github.com/svanharmelen/gocs"
 	"time"
+	"os"
+	"io"
+	"path"
 	"encoding/json"
+	"compress/gzip"
 )
 
 var builtins = map[string]string{
@@ -33,6 +37,7 @@ type Config struct {
 	SshEnabled	bool `mapstructure:"ssh_enabled"`
 	HasTools	bool `mapstructure:"has_tools"` // isdynamicallyscalable in CloudStack vernacular
 	UploadTimer	uint `mapstructure:"upload_timer"`
+	CompressVhd	bool `mapstructure:"compress_vhd"`
 
 	tpl *packer.ConfigTemplate
 }
@@ -137,7 +142,36 @@ func (p *PostProcessor) PostProcess(ui packer.Ui, artifact packer.Artifact) (pac
 		requiresHVM = "true"
 	}
 
-	ui.Message(fmt.Sprintf("Uploading %s to CloudStack", vhd))
+	dir, file := path.Split(vhd)
+
+	copyFromUrl := ""
+	uploadFile := vhd
+
+	if p.config.CompressVhd {
+		uploadFile = dir + "template.vhd.gzip"
+		os.Remove ( uploadFile ) // remove any existing file to ensure no corruption
+
+		ui.Message(fmt.Sprintf("Compressing '%s' to '%s'", vhd, uploadFile))	
+
+		err := compressVhd  ( vhd, uploadFile)
+		if err != nil {
+			return nil, false, fmt.Errorf("Error compressing template '%s': %s", vhd, err)
+		}
+
+		if strings.HasSuffix (p.config.DownloadUrl, "/" ) {
+			copyFromUrl = p.config.DownloadUrl + "template.vhd.gzip"
+		} else {
+			copyFromUrl = fmt.Sprintf("%s/%s", p.config.DownloadUrl, "template.vhd.gzip") 
+		}
+	} else {
+		if strings.HasSuffix (p.config.DownloadUrl, "/" ) {
+			copyFromUrl = p.config.DownloadUrl + file
+		} else {
+			copyFromUrl = fmt.Sprintf("%s/%s", p.config.DownloadUrl, file) 
+		}
+	}
+
+	ui.Message(fmt.Sprintf("Uploading %s to CloudStack", uploadFile))
 
 	// Create a new caching client
 	acs, err := gocs.NewCachingClient(p.config.ApiUrl, p.config.ApiKey, p.config.Secret, 0, false)
@@ -160,7 +194,7 @@ func (p *PostProcessor) PostProcess(ui packer.Ui, artifact packer.Artifact) (pac
 	ui.Say(fmt.Sprintf("Zone '%s' has id '%s'", p.config.Zone, zoneid))	
 
 	templateid, err := acs.Request("registerTemplate", fmt.Sprintf("displaytext:%s, ostypeid:%s, format:vhd, hypervisor:xenserver, name:%s, zoneid:%s, url:%s, requireshvm:%s",
-									p.config.DisplayText, ostypeid, p.config.TemplateName, zoneid, p.config.DownloadUrl, requiresHVM))
+									p.config.DisplayText, ostypeid, p.config.TemplateName, zoneid, copyFromUrl, requiresHVM))
 	if err != nil {
 		return nil, false, fmt.Errorf("Error registering template '%s': %s", p.config.TemplateName, err)
 	}
@@ -198,6 +232,8 @@ func (p *PostProcessor) PostProcess(ui packer.Ui, artifact packer.Artifact) (pac
 			if strings.TrimSpace(lastStatus) != "" && !downloadStarted {
 				if strings.Contains (lastStatus, "%") {
 					downloadStarted = true
+				} else if strings.HasPrefix (lastStatus, "Failed") {
+					return nil, false, fmt.Errorf("Template '%s' processing aborted due to error: '%s'", p.config.TemplateName, strings.TrimSpace(lastStatus))
 				} else {
 					return nil, false, fmt.Errorf("Template '%s' download aborted due to error: '%s'", p.config.TemplateName, strings.TrimSpace(lastStatus))
 				}
@@ -214,4 +250,30 @@ func (p *PostProcessor) PostProcess(ui packer.Ui, artifact packer.Artifact) (pac
 
 
 	return artifact, false, nil
+}
+
+
+func compressVhd ( templateVhd string, gzFilename string ) (err error) {
+
+	gzFile, err := os.Create(gzFilename)
+	if err != nil {
+		return fmt.Errorf( "Failed creating file for compressed archive %s: %s", gzFilename, err)
+	}
+	defer gzFile.Close()
+
+	gzipWriter := gzip.NewWriter(gzFile)
+	defer gzipWriter.Close()
+
+	// Open the target file for archiving and compressing.
+	fileReader, err := os.Open(templateVhd)
+	if err != nil {
+		return fmt.Errorf("Failed opening file '%s' to write compressed archive. %s", templateVhd, err)
+	}
+	defer fileReader.Close()
+
+	if _, err = io.Copy(gzipWriter, fileReader); err != nil {
+		return fmt.Errorf("Failed copying file %s to archive: %s", templateVhd, err)
+	}
+
+	return nil
 }
