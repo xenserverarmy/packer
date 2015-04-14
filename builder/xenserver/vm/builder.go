@@ -159,7 +159,7 @@ func (self *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (pa
 			HostPortMax: self.config.HostPortMax,
 			ResultKey:   "local_ssh_port",
 		},
-		new(xscommon.StepBootWait),
+		//new(xscommon.StepBootWait),
 		&common.StepConnectSSH{
 			SSHAddress:     xscommon.SSHLocalAddress,
 			SSHConfig:      xscommon.SSHConfig,

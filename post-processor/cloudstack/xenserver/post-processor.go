@@ -193,8 +193,8 @@ func (p *PostProcessor) PostProcess(ui packer.Ui, artifact packer.Artifact) (pac
 
 	ui.Say(fmt.Sprintf("Zone '%s' has id '%s'", p.config.Zone, zoneid))	
 
-	templateid, err := acs.Request("registerTemplate", fmt.Sprintf("displaytext:%s, ostypeid:%s, format:vhd, hypervisor:xenserver, name:%s, zoneid:%s, url:%s, requireshvm:%s",
-									p.config.DisplayText, ostypeid, p.config.TemplateName, zoneid, copyFromUrl, requiresHVM))
+	templateid, err := acs.Request("registerTemplate", fmt.Sprintf("displaytext:%s, ostypeid:%s, format:vhd, hypervisor:xenserver, name:%s, zoneid:%s, url:%s, requireshvm:%t, passwordenabled:%t, sshkeyenabled:%t, isdynamicallyscalable:%t",
+									p.config.DisplayText, ostypeid, p.config.TemplateName, zoneid, copyFromUrl, requiresHVM, p.config.PwdEnabled, p.config.SshEnabled, p.config.HasTools))
 	if err != nil {
 		return nil, false, fmt.Errorf("Error registering template '%s': %s", p.config.TemplateName, err)
 	}

@@ -27,10 +27,13 @@
 user=root
 
 # Add your DHCP lease folders here
-DHCP_FOLDERS="/var/lib/dhclient/* /var/lib/dhcp3/* /var/lib/dhcp/*"
+DHCP_FOLDERS="/var/lib/dhclient/* /var/lib/dhcp3/* /var/lib/dhcp/* /var/lib/NetworkManager/*"
 password_received=0
 file_count=0
 error_count=0
+
+logger -t "cloud" "Waiting for VR to stabilize, and for leases to generate"
+sleep 30s
 
 for DHCP_FILE in $DHCP_FOLDERS
 do
@@ -43,7 +46,16 @@ do
 		then
 			logger -t "cloud" "Found password server IP $PASSWORD_SERVER_IP in $DHCP_FILE"
 			logger -t "cloud" "Sending request to password server at $PASSWORD_SERVER_IP"
-			password=$(wget -q -t 3 -T 20 -O - --header "DomU_Request: send_my_password" $PASSWORD_SERVER_IP:8080)
+
+			if hash wget 2>/dev/null; then
+				password=$(wget -q -t 3 -T 20 -O - --header "DomU_Request: send_my_password" $PASSWORD_SERVER_IP:8080)
+			elif hash curl 2>/dev/null; then
+				password=$(curl -s --retry 3 -m 20 --output - --header "DomU_Request: send_my_password" $PASSWORD_SERVER_IP:8080)
+			else
+        			logger -t "cloud" "Neither wget nor curl are installed."
+				exit 1
+			fi
+
 			password=$(echo $password | tr -d '\r')
 
 			if [ $? -eq 0 ]
@@ -111,6 +123,15 @@ then
 fi
 						
 logger -t "cloud" "Sending acknowledgment to password server at $PASSWORD_SERVER_IP"
-wget -t 3 -T 20 -O - --header "DomU_Request: saved_password" $PASSWORD_SERVER_IP:8080
+
+if hash wget 2>/dev/null; then
+	password=$(wget -q -t 3 -T 20 -O - --header "DomU_Request: saved_password" $PASSWORD_SERVER_IP:8080)
+elif hash curl 2>/dev/null; then
+	password=$(curl -s --retry 3 -m 20 --output - --header "DomU_Request: saved_password" $PASSWORD_SERVER_IP:8080)
+else
+	logger -t "cloud" "Neither wget nor curl are installed."
+	exit 1
+fi
+
 exit 0
 

@@ -1,6 +1,8 @@
 # remove device rules
 rm -f /etc/udev/rules.d/70*
-rm -f /var/lib/dhcp/dhclient.*
+rm -f /var/lib/dhcp/dhclient*.*
+rm -f /var/lib/dhclient/dhclient*.*
+rm -f /var/lib/NetworkManager/dhclient*.*
 
 # remove/clear generic log files
 cat /dev/null > /var/log/audit/audit.log 2>/dev/null
