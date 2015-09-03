@@ -5,8 +5,7 @@ import (
 
 	"github.com/mitchellh/multistep"
 	"github.com/mitchellh/packer/packer"
-
-	xsclient "github.com/xenserverarmy/go-xenserver-client"
+	xsclient "github.com/xenserver/go-xenserver-client"
 )
 
 type stepCreateInstance struct {
@@ -51,7 +50,7 @@ func (self *stepCreateInstance) Run(state multistep.StateBag) multistep.StepActi
 		return multistep.ActionHalt
 	}
 
-	err = instance.SetStaticMemoryRange(config.VMMemory*1024*1024, config.VMMemory*1024*1024)
+	err = instance.SetStaticMemoryRange(uint64(config.VMMemory*1024*1024), uint64(config.VMMemory*1024*1024))
 	if err != nil {
 		ui.Error(fmt.Sprintf("Error setting VM memory=%d: %s", config.VMMemory*1024*1024, err.Error()))
 		return multistep.ActionHalt
@@ -75,6 +74,11 @@ func (self *stepCreateInstance) Run(state multistep.StateBag) multistep.StepActi
 		return multistep.ActionHalt
 	}
 
+	instance.SetDescription(config.VMDescription)
+	if err != nil {
+		ui.Error(fmt.Sprintf("Error setting VM description: %s", err.Error()))
+		return multistep.ActionHalt
+	}
 
 	// Create VDI for the instance
 
@@ -91,7 +95,7 @@ func (self *stepCreateInstance) Run(state multistep.StateBag) multistep.StepActi
 	}
 	self.vdi = vdi
 
-	err = instance.ConnectVdi(vdi, xsclient.Disk)
+	err = instance.ConnectVdi(vdi, xsclient.Disk, "")
 	if err != nil {
 		ui.Error(fmt.Sprintf("Unable to connect packer disk VDI: %s", err.Error()))
 		return multistep.ActionHalt

@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/mitchellh/packer/common"
+	"github.com/mitchellh/packer/helper/config"
 	"github.com/mitchellh/packer/packer"
+	"github.com/mitchellh/packer/template/interpolate"
 	"strings"
 	"github.com/svanharmelen/gocs"
 	"time"
@@ -39,7 +41,7 @@ type Config struct {
 	UploadTimer	uint `mapstructure:"upload_timer"`
 	CompressVhd	bool `mapstructure:"compress_vhd"`
 
-	tpl *packer.ConfigTemplate
+	ctx interpolate.Context
 }
 
 type TemplateResponse struct {
@@ -52,16 +54,17 @@ type PostProcessor struct {
 }
 
 func (p *PostProcessor) Configure(raws ...interface{}) error {
-	_, err := common.DecodeConfig(&p.config, raws...)
-	if err != nil {
-		return err
-	}
 
-	p.config.tpl, err = packer.NewConfigTemplate()
+	err := config.Decode(&p.config, &config.DecodeOpts{
+		Interpolate:        true,
+		InterpolateContext: &p.config.ctx,
+		InterpolateFilter: &interpolate.RenderFilter{
+			Exclude: []string{},
+		},
+	}, raws...)
 	if err != nil {
 		return err
 	}
-	p.config.tpl.UserVars = p.config.PackerUserVars
 
 	if p.config.UploadTimer == 0 {
 		p.config.UploadTimer  = 1200
@@ -90,23 +93,11 @@ func (p *PostProcessor) Configure(raws ...interface{}) error {
 	}
 
 	// Then define the ones that are optional
-	templates["account"] = &p.config.Account
-	templates["domain"] = &p.config.Domain
-
 	if p.config.Account != "" && p.config.Domain == "" {
 		errs = packer.MultiErrorAppend(
 			errs, errors.New("If the account is specified, the domain must also be specified."))
 	}
 
-
-	// Template process
-	for key, ptr := range templates {
-		*ptr, err = p.config.tpl.Process(*ptr, nil)
-		if err != nil {
-			errs = packer.MultiErrorAppend(
-				errs, fmt.Errorf("Error processing %s: %s", key, err))
-		}
-	}
 
 	if len(errs.Errors) > 0 {
 		return errs

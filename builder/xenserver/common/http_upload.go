@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"github.com/mitchellh/multistep"
 	"github.com/mitchellh/packer/packer"
+	xsclient "github.com/xenserver/go-xenserver-client"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"time"
-
-	xsclient "github.com/xenserverarmy/go-xenserver-client"
 )
 
 func appendQuery(urlstring, k, v string) (string, error) {

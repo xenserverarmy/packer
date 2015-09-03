@@ -12,6 +12,6 @@ DLPATH=$(echo "/var/run/sr-mount/$SRUUID$ISOPATH/$2")
 
 #Download only if this exists
 if ! [ -f $DLPATH ]; then
-	curl -o $DLPATH $3
+	curl -f --show-error -s -o $DLPATH $3
 fi
 

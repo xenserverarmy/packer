@@ -8,10 +8,12 @@ import (
 
 	"github.com/mitchellh/multistep"
 	"github.com/mitchellh/packer/common"
+	"github.com/mitchellh/packer/helper/communicator"
+	hconfig "github.com/mitchellh/packer/helper/config"
 	"github.com/mitchellh/packer/packer"
+	"github.com/mitchellh/packer/template/interpolate"
 	xscommon "github.com/xenserverarmy/packer/builder/xenserver/common"
-
-	xsclient "github.com/xenserverarmy/go-xenserver-client"
+	xsclient "github.com/xenserver/go-xenserver-client"
 )
 
 type config struct {
@@ -19,11 +21,11 @@ type config struct {
 	xscommon.CommonConfig `mapstructure:",squash"`
 
 	SourcePath string `mapstructure:"source_path"`
-	VMMemory      uint   `mapstructure:"vm_memory"`
+	VMMemory   uint   `mapstructure:"vm_memory"`
 
 	PlatformArgs map[string]string `mapstructure:"platform_args"`
 
-	tpl *packer.ConfigTemplate
+	ctx interpolate.Context
 }
 
 type Builder struct {
@@ -33,20 +35,23 @@ type Builder struct {
 
 func (self *Builder) Prepare(raws ...interface{}) (params []string, retErr error) {
 
-	md, err := common.DecodeConfig(&self.config, raws...)
+	var errs *packer.MultiError
+
+	err := hconfig.Decode(&self.config, &hconfig.DecodeOpts{
+		Interpolate: true,
+		InterpolateFilter: &interpolate.RenderFilter{
+			Exclude: []string{
+				"boot_command",
+			},
+		},
+	}, raws...)
+
 	if err != nil {
-		return nil, err
+		packer.MultiErrorAppend(errs, err)
 	}
 
-	self.config.tpl, err = packer.NewConfigTemplate()
-	if err != nil {
-		return nil, err
-	}
-	self.config.tpl.UserVars = self.config.PackerUserVars
-
-	errs := common.CheckUnusedConfig(md)
 	errs = packer.MultiErrorAppend(
-		errs, self.config.CommonConfig.Prepare(self.config.tpl, &self.config.PackerConfig)...)
+		errs, self.config.CommonConfig.Prepare(&self.config.ctx, &self.config.PackerConfig)...)
 
 	// Set default values
 
@@ -63,21 +68,6 @@ func (self *Builder) Prepare(raws ...interface{}) (params []string, retErr error
 		pargs["timeoffset"] = "0"
 		pargs["acpi"] = "1"
 		self.config.PlatformArgs = pargs
-	}
-
-	// Template substitution
-
-	templates := map[string]*string{
-		"source_path":   &self.config.SourcePath,
-		"network_name":   &self.config.NetworkName,
-	}
-
-	for n, ptr := range templates {
-		var err error
-		*ptr, err = self.config.tpl.Process(*ptr, nil)
-		if err != nil {
-			errs = packer.MultiErrorAppend(errs, fmt.Errorf("Error processing %s: %s", n, err))
-		}
 	}
 
 	// Validation
@@ -128,7 +118,9 @@ func (self *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (pa
 		},
 		new(xscommon.StepHTTPServer),
 		&xscommon.StepUploadVdi{
-			VdiName: "Packer-floppy-disk",
+			VdiNameFunc: func() string {
+				return "Packer-floppy-disk"
+			},
 			ImagePathFunc: func() string {
 				if floppyPath, ok := state.GetOk("floppy_path"); ok {
 					return floppyPath.(string)
@@ -161,11 +153,11 @@ func (self *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (pa
 		},
 		new(xscommon.StepBootWait),
 		&xscommon.StepTypeBootCommand{
-			Tpl: self.config.tpl,
+			Ctx: self.config.ctx,
 		},
 		&xscommon.StepWaitForIP{
 			Chan:    httpReqChan,
-			Timeout: 300 * time.Minute /*self.config.InstallTimeout*/, // @todo change this
+			Timeout: 300 * time.Minute, /*self.config.InstallTimeout*/ // @todo change this
 		},
 		&xscommon.StepForwardPortOverSSH{
 			RemotePort:  xscommon.InstanceSSHPort,
@@ -174,10 +166,11 @@ func (self *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (pa
 			HostPortMax: self.config.HostPortMax,
 			ResultKey:   "local_ssh_port",
 		},
-		&common.StepConnectSSH{
-			SSHAddress:     xscommon.SSHLocalAddress,
-			SSHConfig:      xscommon.SSHConfig,
-			SSHWaitTimeout: self.config.SSHWaitTimeout,
+		&communicator.StepConnect{
+			Config:    &self.config.SSHConfig.Comm,
+			Host:      xscommon.CommHost,
+			SSHConfig: xscommon.SSHConfigFunc(self.config.CommonConfig.SSHConfig),
+			SSHPort:   xscommon.SSHPort,
 		},
 		new(common.StepProvision),
 		new(xscommon.StepShutdown),

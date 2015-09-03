@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"github.com/mitchellh/multistep"
 	"github.com/mitchellh/packer/packer"
+	xsclient "github.com/xenserver/go-xenserver-client"
 	"log"
-
-	xsclient "github.com/xenserverarmy/go-xenserver-client"
 )
 
 type StepAttachVdi struct {
@@ -42,7 +41,7 @@ func (self *StepAttachVdi) Run(state multistep.StateBag) multistep.StepAction {
 		return multistep.ActionHalt
 	}
 
-	err = instance.ConnectVdi(self.vdi, self.VdiType)
+	err = instance.ConnectVdi(self.vdi, self.VdiType, "")
 	if err != nil {
 		ui.Error(fmt.Sprintf("Error attaching VDI '%s': '%s'", vdiUuid, err.Error()))
 		return multistep.ActionHalt

@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"github.com/mitchellh/multistep"
 	"github.com/mitchellh/packer/packer"
+	xsclient "github.com/xenserver/go-xenserver-client"
 	"log"
-
-	xsclient "github.com/xenserverarmy/go-xenserver-client"
 )
 
 type StepDetachVdi struct {

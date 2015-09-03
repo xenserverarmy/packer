@@ -9,9 +9,8 @@ import (
 	"github.com/mitchellh/multistep"
 	"github.com/mitchellh/packer/common"
 	commonssh "github.com/mitchellh/packer/common/ssh"
-	"github.com/mitchellh/packer/packer"
-
-	xsclient "github.com/xenserverarmy/go-xenserver-client"
+	"github.com/mitchellh/packer/template/interpolate"
+	xsclient "github.com/xenserver/go-xenserver-client"
 )
 
 type CommonConfig struct {
@@ -19,10 +18,11 @@ type CommonConfig struct {
 	Password string `mapstructure:"remote_password"`
 	HostIp   string `mapstructure:"remote_host"`
 
-	VMName      string   `mapstructure:"vm_name"`
-	SrName      string   `mapstructure:"sr_name"`
-	FloppyFiles []string `mapstructure:"floppy_files"`
-	NetworkName string   `mapstructure:"network_name"`
+	VMName        string   `mapstructure:"vm_name"`
+	VMDescription string   `mapstructure:"vm_description"`
+	SrName        string   `mapstructure:"sr_name"`
+	FloppyFiles   []string `mapstructure:"floppy_files"`
+	NetworkName   string   `mapstructure:"network_name"`
 
 	HostPortMin uint `mapstructure:"host_port_min"`
 	HostPortMax uint `mapstructure:"host_port_max"`
@@ -41,20 +41,24 @@ type CommonConfig struct {
 
 	//	SSHHostPortMin    uint   `mapstructure:"ssh_host_port_min"`
 	//	SSHHostPortMax    uint   `mapstructure:"ssh_host_port_max"`
-	SSHKeyPath        string `mapstructure:"ssh_key_path"`
-	SSHPassword       string `mapstructure:"ssh_password"`
-	SSHPort           uint   `mapstructure:"ssh_port"`
-	SSHUser           string `mapstructure:"ssh_username"`
+	SSHKeyPath  string `mapstructure:"ssh_key_path"`
+	SSHPassword string `mapstructure:"ssh_password"`
+	SSHPort     uint   `mapstructure:"ssh_port"`
+	SSHUser     string `mapstructure:"ssh_username"`
+	SSHConfig   `mapstructure:",squash"`
+
 	RawSSHWaitTimeout string `mapstructure:"ssh_wait_timeout"`
 	SSHWaitTimeout    time.Duration
 
 	OutputDir string `mapstructure:"output_directory"`
 	Format    string `mapstructure:"format"`
 	KeepVM    string `mapstructure:"keep_vm"`
+	IPGetter  string `mapstructure:"ip_getter"`
 }
 
-func (c *CommonConfig) Prepare(t *packer.ConfigTemplate, pc *common.PackerConfig) []error {
+func (c *CommonConfig) Prepare(ctx *interpolate.Context, pc *common.PackerConfig) []error {
 	var err error
+	var errs []error
 
 	// Set default values
 
@@ -124,36 +128,8 @@ func (c *CommonConfig) Prepare(t *packer.ConfigTemplate, pc *common.PackerConfig
 		c.KeepVM = "never"
 	}
 
-	// Template substitution
-
-	templates := map[string]*string{
-		"remote_username":  &c.Username,
-		"remote_password":  &c.Password,
-		"remote_host":      &c.HostIp,
-		"vm_name":          &c.VMName,
-		"sr_name":          &c.SrName,
-		"shutdown_command": &c.ShutdownCommand,
-		"boot_wait":        &c.RawBootWait,
-		"tools_iso_name":   &c.ToolsIsoName,
-		"http_directory":   &c.HTTPDir,
-		"ssh_key_path":     &c.SSHKeyPath,
-		"ssh_password":     &c.SSHPassword,
-		"ssh_username":     &c.SSHUser,
-		"ssh_wait_timeout": &c.RawSSHWaitTimeout,
-		"output_directory": &c.OutputDir,
-		"format":           &c.Format,
-		"keep_vm":          &c.KeepVM,
-	}
-	for i := range c.FloppyFiles {
-		templates[fmt.Sprintf("floppy_files[%d]", i)] = &c.FloppyFiles[i]
-	}
-
-	errs := make([]error, 0)
-	for n, ptr := range templates {
-		*ptr, err = t.Process(*ptr, nil)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("Error processing %s: %s", n, err))
-		}
+	if c.IPGetter == "" {
+		c.IPGetter = "auto"
 	}
 
 	// Validation
@@ -181,13 +157,6 @@ func (c *CommonConfig) Prepare(t *packer.ConfigTemplate, pc *common.PackerConfig
 	c.BootWait, err = time.ParseDuration(c.RawBootWait)
 	if err != nil {
 		errs = append(errs, fmt.Errorf("Failed to parse boot_wait: %s", err))
-	}
-
-	for i, command := range c.BootCommand {
-		if err := t.Validate(command); err != nil {
-			errs = append(errs,
-				fmt.Errorf("Error processing boot_command[%d]: %s", i, err))
-		}
 	}
 
 	if c.SSHKeyPath != "" {
@@ -224,6 +193,12 @@ func (c *CommonConfig) Prepare(t *packer.ConfigTemplate, pc *common.PackerConfig
 	case "always", "never", "on_success":
 	default:
 		errs = append(errs, errors.New("keep_vm must be one of 'always', 'never', 'on_success'"))
+	}
+
+	switch c.IPGetter {
+	case "auto", "tools", "http":
+	default:
+		errs = append(errs, errors.New("ip_getter must be one of 'auto', 'tools', 'http'"))
 	}
 
 	return errs

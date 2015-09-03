@@ -5,7 +5,7 @@ import (
 	"github.com/mitchellh/multistep"
 	"github.com/mitchellh/packer/packer"
 
-	xsclient "github.com/xenserverarmy/go-xenserver-client"
+	xsclient "github.com/xenserver/go-xenserver-client"
 )
 
 type StepIsoDownload struct {

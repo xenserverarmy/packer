@@ -5,8 +5,7 @@ import (
 	"github.com/mitchellh/multistep"
 	"github.com/mitchellh/packer/packer"
 	"log"
-
-	xsclient "github.com/xenserverarmy/go-xenserver-client"
+	xsclient "github.com/xenserver/go-xenserver-client"
 )
 
 type StepStartVm struct{}

@@ -5,8 +5,7 @@ import (
 	"github.com/mitchellh/multistep"
 	"github.com/mitchellh/packer/packer"
 	"time"
-
-	xsclient "github.com/xenserverarmy/go-xenserver-client"
+	xsclient "github.com/xenserver/go-xenserver-client"
 )
 
 type StepWaitForShutdown struct{}
@@ -14,6 +13,9 @@ type StepWaitForShutdown struct{}
 func (StepWaitForShutdown) Run(state multistep.StateBag) multistep.StepAction {
 	//config := state.Get("commonconfig").(CommonConfig)
 	ui := state.Get("ui").(packer.Ui)
+
+	ui.Say("Step: Waiting for installer to shutdown VM.")
+
 	client := state.Get("client").(xsclient.XenAPIClient)
 	instance_uuid := state.Get("instance_uuid").(string)
 
@@ -22,9 +24,6 @@ func (StepWaitForShutdown) Run(state multistep.StateBag) multistep.StepAction {
 		ui.Error(fmt.Sprintf("Could not get VM with UUID '%s': %s", instance_uuid, err.Error()))
 		return multistep.ActionHalt
 	}
-
-	ui.Say("Step: Waiting for installer to shutdown VM")
-
 
 	func() {
 		err = InterruptibleWait{

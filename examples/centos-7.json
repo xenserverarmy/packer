@@ -4,7 +4,7 @@
       "type": "xenserver-iso",
       "remote_host": "10.204.137.60",
       "remote_username": "root",
-      "remote_password": "Password1",
+      "remote_password": "{{user `xenserver_password`}}",
 
       "boot_command": [
         "<tab><end> ks=http://10.204.137.80/ks/centos7-ks.cfg<enter><wait>"
@@ -12,8 +12,8 @@
       "boot_wait": "10s",
       "disk_size": 40960,
       "http_directory": "/var/www/html/packer",
-      "iso_url": "{{user `mirror`}}/7/isos/x86_64/CentOS-7.0-1406-x86_64-Minimal.iso",
-      "iso_name": "CentOS-7.0-1406-x86_64-Minimal.iso",
+      "iso_url": "http://mirrors.seas.harvard.edu/centos/7/isos/x86_64/CentOS-7-x86_64-Minimal-1503-01.iso1",
+      "iso_name": "CentOS-7-x86_64-Minimal-1503-01.iso1",
       "iso_sr": "CIFS ISO library",	
       "script_url": "http://10.204.137.80/packer/xenserver/",
       "output_directory": "centos-7-x86_64-xenserver-acs-minimal",
@@ -31,6 +31,6 @@
   ],
 
   "variables": {
-    "mirror": "http://www.mirrorservice.org/sites/mirror.centos.org"
+    "xenserver_password": "{{env `XS_PASS`}}"
   }
 }

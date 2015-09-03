@@ -4,15 +4,14 @@ import (
 	"fmt"
 	"github.com/mitchellh/multistep"
 	"github.com/mitchellh/packer/packer"
+	xsclient "github.com/xenserver/go-xenserver-client"
 	"log"
 	"os"
 	"time"
-
-	xsclient "github.com/xenserverarmy/go-xenserver-client"
 )
 
 type StepUploadVdi struct {
-	VdiName       string
+	VdiNameFunc   func() string
 	ImagePathFunc func() string
 	VdiUuidKey    string
 }
@@ -23,12 +22,13 @@ func (self *StepUploadVdi) Run(state multistep.StateBag) multistep.StepAction {
 	client := state.Get("client").(xsclient.XenAPIClient)
 
 	imagePath := self.ImagePathFunc()
+	vdiName := self.VdiNameFunc()
 	if imagePath == "" {
 		// skip if no disk image to attach
 		return multistep.ActionContinue
 	}
 
-	ui.Say(fmt.Sprintf("Step: Upload VDI '%s'", self.VdiName))
+	ui.Say(fmt.Sprintf("Step: Upload VDI '%s'", vdiName))
 
 	// Create VDI for the image
 	sr, err := config.GetSrByName(client, config.SrName)
@@ -53,15 +53,15 @@ func (self *StepUploadVdi) Run(state multistep.StateBag) multistep.StepAction {
 	fileLength := fstat.Size()
 
 	// Create the VDI
-	vdi, err := sr.CreateVdi(self.VdiName, fileLength)
+	vdi, err := sr.CreateVdi(vdiName, fileLength)
 	if err != nil {
-		ui.Error(fmt.Sprintf("Unable to create VDI '%s': %s", self.VdiName, err.Error()))
+		ui.Error(fmt.Sprintf("Unable to create VDI '%s': %s", vdiName, err.Error()))
 		return multistep.ActionHalt
 	}
 
 	vdiUuid, err := vdi.GetUuid()
 	if err != nil {
-		ui.Error(fmt.Sprintf("Unable to get UUID of VDI '%s': %s", self.VdiName, err.Error()))
+		ui.Error(fmt.Sprintf("Unable to get UUID of VDI '%s': %s", vdiName, err.Error()))
 		return multistep.ActionHalt
 	}
 	state.Put(self.VdiUuidKey, vdiUuid)
@@ -83,6 +83,7 @@ func (self *StepUploadVdi) Cleanup(state multistep.StateBag) {
 	config := state.Get("commonconfig").(CommonConfig)
 	ui := state.Get("ui").(packer.Ui)
 	client := state.Get("client").(xsclient.XenAPIClient)
+	vdiName := self.VdiNameFunc()
 
 	if config.ShouldKeepVM(state) {
 		return
@@ -120,7 +121,7 @@ func (self *StepUploadVdi) Cleanup(state multistep.StateBag) {
 		ui.Error(fmt.Sprintf("Can't destroy VDI '%s': %s", vdiUuid, err.Error()))
 		return
 	}
-	ui.Say(fmt.Sprintf("Destroyed VDI '%s'", self.VdiName))
+	ui.Say(fmt.Sprintf("Destroyed VDI '%s'", vdiName))
 
 	state.Put(self.VdiUuidKey, "")
 }

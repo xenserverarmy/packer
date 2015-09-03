@@ -6,9 +6,8 @@ import (
 
 	"github.com/mitchellh/multistep"
 	"github.com/mitchellh/packer/packer"
-	xscommon "github.com/xenserverarmy/packer/builder/xenserver/common"
-
-	xsclient "github.com/xenserverarmy/go-xenserver-client"
+	xscommon "github.com/rdobson/packer-builder-xenserver/builder/xenserver/common"
+	xsclient "github.com/xenserver/go-xenserver-client"
 )
 
 type stepImportInstance struct {
@@ -141,7 +140,6 @@ func (self *stepImportInstance) Run(state multistep.StateBag) multistep.StepActi
 		ui.Error(fmt.Sprintf("Unable to get VM UUID: %s", err.Error()))
 		return multistep.ActionHalt
 	}
-
 	state.Put("instance_uuid", instanceId)
 
 	bootOrder, err := instance.GetHVMBootPolicy()
@@ -152,6 +150,11 @@ func (self *stepImportInstance) Run(state multistep.StateBag) multistep.StepActi
 	
 	state.Put("virtualization_type", bootOrder)
 
+	instance.SetDescription(config.VMDescription)
+	if err != nil {
+		ui.Error(fmt.Sprintf("Error setting VM description: %s", err.Error()))
+		return multistep.ActionHalt
+	}
 	ui.Say(fmt.Sprintf("Imported instance '%s'", instanceId))
 
 	return multistep.ActionContinue

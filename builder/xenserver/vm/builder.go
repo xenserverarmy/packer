@@ -8,10 +8,12 @@ import (
 
 	"github.com/mitchellh/multistep"
 	"github.com/mitchellh/packer/common"
+	"github.com/mitchellh/packer/helper/communicator"
+	hconfig "github.com/mitchellh/packer/helper/config"
 	"github.com/mitchellh/packer/packer"
+	"github.com/mitchellh/packer/template/interpolate"
 	xscommon "github.com/xenserverarmy/packer/builder/xenserver/common"
-
-	xsclient "github.com/xenserverarmy/go-xenserver-client"
+	xsclient "github.com/xenserver/go-xenserver-client"
 )
 
 type config struct {
@@ -27,7 +29,7 @@ type config struct {
 	BootTimeout    time.Duration ``
 	TemporaryVm	string	 ``	
 
-	tpl *packer.ConfigTemplate
+	ctx interpolate.Context
 }
 
 type Builder struct {
@@ -37,38 +39,27 @@ type Builder struct {
 
 func (self *Builder) Prepare(raws ...interface{}) (params []string, retErr error) {
 
-	md, err := common.DecodeConfig(&self.config, raws...)
+	var errs *packer.MultiError
+
+	err := hconfig.Decode(&self.config, &hconfig.DecodeOpts{
+		Interpolate: true,
+		InterpolateFilter: &interpolate.RenderFilter{
+			Exclude: []string{
+				"boot_command",
+			},
+		},
+	}, raws...)
+
 	if err != nil {
-		return nil, err
+		packer.MultiErrorAppend(errs, err)
 	}
 
-	self.config.tpl, err = packer.NewConfigTemplate()
-	if err != nil {
-		return nil, err
-	}
-	self.config.tpl.UserVars = self.config.PackerUserVars
-
-	errs := common.CheckUnusedConfig(md)
-	errs = packer.MultiErrorAppend( errs, self.config.CommonConfig.Prepare(self.config.tpl, &self.config.PackerConfig)...)
-
-	// Set default values
+	errs = packer.MultiErrorAppend(
+		errs, self.config.CommonConfig.Prepare(&self.config.ctx, &self.config.PackerConfig)...)
+	errs = packer.MultiErrorAppend(errs, self.config.SSHConfig.Prepare(&self.config.ctx)...)	// Set default values
 
 	if self.config.RawBootTimeout == "" {
 		self.config.RawBootTimeout = "200m"
-	}
-
-	// Template and environment substitution
-	templates := map[string]*string{
-		"source_vm":    	&self.config.SourceVm,
-		"network_name":      &self.config.NetworkName,
-		"boot_timeout":   	&self.config.RawBootTimeout,
-	}
-	for n, ptr := range templates {
-		var err error
-		*ptr, err = self.config.tpl.Process(*ptr, nil)
-		if err != nil {
-			errs = packer.MultiErrorAppend(errs, fmt.Errorf("Error processing %s: %s", n, err))
-		}
 	}
 
 	// Validation
@@ -143,7 +134,7 @@ func (self *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (pa
 		},
 		new(xscommon.StepBootWait),
 		&xscommon.StepTypeBootCommand{
-			Tpl: self.config.tpl,
+			Ctx: self.config.ctx,
 		},
 		new(xscommon.StepWaitForShutdown),
 		new(stepRestoreNetwork),
@@ -160,10 +151,11 @@ func (self *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (pa
 			ResultKey:   "local_ssh_port",
 		},
 		//new(xscommon.StepBootWait),
-		&common.StepConnectSSH{
-			SSHAddress:     xscommon.SSHLocalAddress,
-			SSHConfig:      xscommon.SSHConfig,
-			SSHWaitTimeout: self.config.SSHWaitTimeout,
+		&communicator.StepConnectSSH{
+			Config:    &self.config.SSHConfig.Comm,
+			Host:      xscommon.CommHost,
+			SSHConfig: xscommon.SSHConfigFunc(self.config.CommonConfig.SSHConfig),
+			SSHPort:   xscommon.SSHPort,
 		},
 		new(common.StepProvision),
 		new(xscommon.StepShutdown),

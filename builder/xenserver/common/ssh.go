@@ -2,12 +2,12 @@ package common
 
 import (
 	"bytes"
-	gossh "code.google.com/p/go.crypto/ssh"
 	"fmt"
 	"github.com/mitchellh/multistep"
-	commonssh "github.com/mitchellh/packer/common/ssh"
 	"github.com/mitchellh/packer/communicator/ssh"
 	"github.com/mitchellh/packer/packer"
+	gossh "golang.org/x/crypto/ssh"
+	commonssh "github.com/mitchellh/packer/common/ssh"
 	"io"
 	"log"
 	"net"
@@ -29,27 +29,38 @@ func SSHLocalAddress(state multistep.StateBag) (string, error) {
 	return conn_str, nil
 }
 
-func SSHConfig(state multistep.StateBag) (*gossh.ClientConfig, error) {
-	config := state.Get("commonconfig").(CommonConfig)
-	auth := []gossh.AuthMethod{
-		gossh.Password(config.SSHPassword),
-		gossh.KeyboardInteractive(
-			ssh.PasswordKeyboardInteractive(config.SSHPassword)),
-	}
+func SSHPort(state multistep.StateBag) (int, error) {
+	sshHostPort := state.Get("local_ssh_port").(uint)
+	return int(sshHostPort), nil
+}
 
-	if config.SSHKeyPath != "" {
-		signer, err := commonssh.FileSigner(config.SSHKeyPath)
-		if err != nil {
-			return nil, err
+func CommHost(state multistep.StateBag) (string, error) {
+	return "127.0.0.1", nil
+}
+
+func SSHConfigFunc(config SSHConfig) func(multistep.StateBag) (*gossh.ClientConfig, error) {
+	return func(state multistep.StateBag) (*gossh.ClientConfig, error) {
+		config := state.Get("commonconfig").(CommonConfig)
+		auth := []gossh.AuthMethod{
+			gossh.Password(config.SSHPassword),
+			gossh.KeyboardInteractive(
+				ssh.PasswordKeyboardInteractive(config.SSHPassword)),
 		}
 
-		auth = append(auth, gossh.PublicKeys(signer))
-	}
+		if config.SSHKeyPath != "" {
+			signer, err := commonssh.FileSigner(config.SSHKeyPath)
+			if err != nil {
+				return nil, err
+			}
 
-	return &gossh.ClientConfig{
-		User: config.SSHUser,
-		Auth: auth,
-	}, nil
+			auth = append(auth, gossh.PublicKeys(signer))
+		}
+
+		return &gossh.ClientConfig{
+			User: config.SSHUser,
+			Auth: auth,
+		}, nil
+	}
 }
 
 func doExecuteSSHCmd(cmd, target string, config *gossh.ClientConfig) (stdout string, err error) {
@@ -143,11 +154,12 @@ func ExecuteHostSSHCmd(state multistep.StateBag, cmd string) (stdout string, err
 }
 
 func ExecuteGuestSSHCmd(state multistep.StateBag, cmd string) (stdout string, err error) {
+	config := state.Get("commonconfig").(CommonConfig)
 	localAddress, err := SSHLocalAddress(state)
 	if err != nil {
 		return
 	}
-	sshConfig, err := SSHConfig(state)
+	sshConfig, err := SSHConfigFunc(config.SSHConfig)(state)
 	if err != nil {
 		return
 	}
@@ -198,23 +210,13 @@ func forward(local_conn net.Conn, config *gossh.ClientConfig, server, remote_des
 	return nil
 }
 
-func ssh_port_forward(local_port uint, remote_port uint, remote_dest, host, username, password string) error {
+func ssh_port_forward(local_listener net.Listener, remote_port uint, remote_dest, host, username, password string) error {
 
 	config := &gossh.ClientConfig{
 		User: username,
 		Auth: []gossh.AuthMethod{
 			gossh.Password(password),
 		},
-	}
-
-	// Listen on a local port
-	local_listener, err := net.Listen("tcp",
-		fmt.Sprintf("%s:%d",
-			"127.0.0.1",
-			local_port))
-	if err != nil {
-		log.Printf("Local listen failed: %s", err)
-		return err
 	}
 
 	for {

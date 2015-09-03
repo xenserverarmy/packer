@@ -4,7 +4,7 @@
       "type": "xenserver-vm",
       "remote_host": "10.204.136.32",
       "remote_username": "root",
-      "remote_password": "Password1",
+      "remote_password": "{{user `xenserver_password`}}",
 
       "boot_command": [
         "<enter>root<enter><wait5>Password1<enter><wait>",
@@ -42,6 +42,10 @@
       "nfs_mount": "10.204.136.41:/vol/exports/packer"
     }
   ],
+
+  "variables": {
+    "xenserver_password": "{{env `XS_PASS`}}"
+  },
 
   "provisioners": [
 	{
