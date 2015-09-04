@@ -18,15 +18,8 @@ func (self *stepCopyCleanScript) Run(state multistep.StateBag) multistep.StepAct
 
 	ui.Say("Step: Copy clean script")
 
-	cmds := []string {
-		"rm -f ./packer-clean.sh",
-		"rm -f /opt/xensource/www/packer-clean.sh",
-		fmt.Sprintf ("wget %spacker-clean.sh", self.ScriptUrl),
-		"cp ./packer-clean.sh /opt/xensource/www/packer-clean.sh",
-		"rm -f ./packer-clean.sh",
-	}
+	err := xscommon.UploadFile ( state, "./scripts/packer-clean.sh", "/opt/xensource/www/packer-clean.sh", true)
 
-	_, err := xscommon.ExecuteHostSSHCmds (state, cmds )
 	if err != nil {
 		ui.Error(fmt.Sprintf("Error saving script on XenServer host '%s'.", err))
 		return multistep.ActionHalt
@@ -45,7 +38,6 @@ func (self *stepCopyCleanScript) Cleanup(state multistep.StateBag) {
 	ui.Say("Step: Cleanup copy script")
 
 	cmds := []string {
-		"rm -f ./packer-clean.sh",
 		"rm -f /opt/xensource/www/packer-clean.sh",
 	}
 

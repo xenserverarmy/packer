@@ -55,16 +55,20 @@ func (self *StepIsoDownload) Run(state multistep.StateBag) multistep.StepAction 
 	}
 
 	// we get here because the ISO doesn't exist, but the SR does
-	// time to download it, but we do that via SSH into the host
+	// time to download it, but we do that via SFTP/SSH into the host
 	
+	err := UploadFile ( state, "./scripts/copyiso.sh", "copyiso.sh", true)
+
+	if err != nil {
+		ui.Error(fmt.Sprintf("Error saving script on XenServer host '%s'.", err))
+		return multistep.ActionHalt
+	}
+
 	cmds := []string {
-		"rm -f ./copyiso.sh",
-		fmt.Sprintf ("wget %scopyiso.sh", self.ScriptUrl),
-		"chmod +x ./copyiso.sh",
 		fmt.Sprintf ( "./copyiso.sh '%s' '%s' '%s' ", self.SrName, self.IsoName, self.DlUrl ),
 		"rm -f ./copyiso.sh" }
 
-	_, err := ExecuteHostSSHCmds (state, cmds )
+	_, err = ExecuteHostSSHCmds (state, cmds )
 	if err != nil {
 		ui.Error(fmt.Sprintf("Error running scripts on XenServer host '%s'.", err))
 		return multistep.ActionHalt

@@ -8,9 +8,11 @@ import (
 	"github.com/mitchellh/packer/packer"
 	gossh "golang.org/x/crypto/ssh"
 	commonssh "github.com/mitchellh/packer/common/ssh"
+	"github.com/pkg/sftp"
 	"io"
 	"log"
 	"net"
+	"os"
 	"strings"
 )
 
@@ -128,8 +130,6 @@ func doExecuteSSHCmds(state multistep.StateBag, cmds[] string, target string, co
 func ExecuteHostSSHCmds(state multistep.StateBag, cmds[] string) (stdout string, err error) {
 	config := state.Get("commonconfig").(CommonConfig)
 
-	//ui := state.Get("ui").(packer.Ui)
-	//ui.Message (fmt.Sprintf("connecting to %s", config.HostIp))
 	// Setup connection config
 	sshConfig := &gossh.ClientConfig{
 		User: config.Username,
@@ -165,6 +165,62 @@ func ExecuteGuestSSHCmd(state multistep.StateBag, cmd string) (stdout string, er
 	}
 
 	return doExecuteSSHCmd(cmd, localAddress, sshConfig)
+}
+
+func UploadFile (state multistep.StateBag, localFilename string, remoteFilename string, allowExecute bool) error {
+	ui := state.Get("ui").(packer.Ui)
+	config := state.Get("commonconfig").(CommonConfig)
+
+	// Setup connection config
+	sshConfig := &gossh.ClientConfig{
+		User: config.Username,
+		Auth: []gossh.AuthMethod{
+			gossh.Password(config.Password),
+		},
+	}
+
+	sshClient, err := gossh.Dial("tcp", config.HostIp + ":22", sshConfig)
+	if err != nil {
+		ui.Error(fmt.Sprintf("Error connecting to host. '%s'.", err))
+		return err
+	}
+	defer sshClient.Close()
+
+	sftpClient, err := sftp.NewClient(sshClient)
+	if err != nil {
+		ui.Error(fmt.Sprintf("Error obtaining sftp client. '%s'.", err))
+		return err
+	}
+	defer sftpClient.Close()
+
+	sourceScript, err := os.Open(localFilename)
+	if err != nil {
+		ui.Error(fmt.Sprintf("Error opening local file '%s'. '%s'.", localFilename, err))
+		return err
+	}
+	defer sourceScript.Close()
+
+	destScript, err := sftpClient.Create(remoteFilename)
+	if err != nil {
+		ui.Error(fmt.Sprintf("Error creating file '%s' on remote host. '%s'.", remoteFilename, config.HostIp, err))
+		return err
+	}
+
+	_, err = io.Copy(destScript, sourceScript)
+	if err != nil {
+		ui.Error(fmt.Sprintf("Error copying file '%s' to remote host. '%s'.", localFilename, config.HostIp, err))
+		return err
+	}
+
+	if allowExecute {
+		err := sftpClient.Chmod(remoteFilename, 555)
+		if err != nil {
+			ui.Error(fmt.Sprintf("Error setting permissions on file '%s' on remote host. '%s'.", remoteFilename, config.HostIp, err))
+			return err
+		}
+	}
+
+	return nil
 }
 
 func forward(local_conn net.Conn, config *gossh.ClientConfig, server, remote_dest string, remote_port uint) error {
