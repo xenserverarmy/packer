@@ -1,0 +1,42 @@
+{
+  "builders": [
+    {
+      "type": "xenserver-vm",
+      "remote_host": "10.204.136.32",
+      "remote_username": "root",
+      "remote_password": "{{user `xenserver_password`}}",
+
+      "boot_command": [
+        "<enter>root<enter><wait>nsroot<enter><wait>",
+	 "cp /etc/network/interfaces ./interfaces.bak<enter>",
+	 "vi ./interfaces.tmp<enter><wait>",
+	 "i<enter>auto eth0<enter>iface eth0 inet dhcp<enter>",
+	 "<esc>:wq!<enter><wait>",
+	 "cp ./interfaces.tmp /etc/network/interfaces<enter>",
+	 "ifdown eth0<enter><wait5>",
+	 "ifup eth0<enter><wait5>",
+	 "wget http://169.254.0.1/packer-clean.sh<enter><wait10>",
+	 "chmod +x packer-clean.sh<enter>",
+	 "./packer-clean.sh<enter>"
+      ],
+      "boot_wait": "180s",
+      "http_directory": "/var/www/html/packer",
+      "source_vm": "MySQLDB 01",
+
+      "script_url": "http://10.204.137.80/packer/xenserver/",
+      "output_directory": "/var/www/html/vhd",
+      "format": "vhd",
+      "shutdown_command": "",
+      "ssh_username": "root",
+      "ssh_password": "nsroot",
+      "ssh_wait_timeout": "10000s",
+      "sr_name": "NFS Packer",
+      "vm_name": "packer-export-mysql01",
+      "nfs_mount": "10.204.136.41:/vol/exports/packer"
+    }
+  ],
+
+  "variables": {
+    "xenserver_password": "{{env `XS_PASS`}}"
+  }
+}
