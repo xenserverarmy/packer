@@ -6,7 +6,7 @@ import (
 
 	"github.com/mitchellh/multistep"
 	"github.com/mitchellh/packer/packer"
-	xscommon "github.com/rdobson/packer-builder-xenserver/builder/xenserver/common"
+	xscommon "github.com/xenserverarmy/packer/builder/xenserver/common"
 	xsclient "github.com/xenserver/go-xenserver-client"
 )
 
