@@ -1,4 +1,4 @@
 *.swp
 *~
-bin
-pkg
+/bin
+/pkg
