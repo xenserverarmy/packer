@@ -9,8 +9,6 @@ XC_ARCH=${XC_ARCH:-$(go env GOARCH)}
 GOPATH=${GOPATH:-$(go env GOPATH)}
 
 # Install dependencies
-echo "==> Getting dependencies..."
-go get ./...
 
 # Delete the old dir
 echo "==> Removing old directory..."
