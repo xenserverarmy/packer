@@ -7,10 +7,11 @@ You can check out packer [here](https://packer.io).
 
 
 ## Dependencies
-* Packer >= 0.7.2 (https://packer.io)
+* Packer >= 0.10.1 (https://packer.io)
 * XenServer > 6.2 (http://xenserver.org)
 * Apache CloudStack > 4.2 (http://cloudstack.apache.org/) for ACS plugin
-* Golang (tested with 1.2.1) 
+* OpenStack Havana or later for OpenStack plugin
+* Golang (tested with 1.6.2) 
 
 
 ## Install Go
@@ -20,13 +21,20 @@ Follow these instructions and install golang on your system:
 
 ## Install Packer
 
-Clone the Packer repository:
+Follow the directions and install packer on your system:
+* https://www.packer.io/downloads.html
 
-```shell
-git clone https://github.com/mitchellh/packer.git
-```
+Note that if you're upgrading from a version of packer prior to 0.9.0, you must remove the packer-* files lest things get confused.
 
-Then follow the [instructions to build and install a development version of Packer](https://github.com/mitchellh/packer#developing-packer).
+> Important: CentOS 7 and RHEL 7 both have a symlink for packer.
+> The symlink points to cracklib-packer, and you're probably
+> going to want to keep that as is. 
+> 
+> To keep things simple, in the examples below, the packer
+> binary has been fully qualified with $GOPATH/bin since
+> I installed packer to that location. Please adjust as
+> your requirements dictate.
+
 
 ## Compile the plugin
 
@@ -95,7 +103,7 @@ A brief explanation of what the config parameters mean:
 Once you've updated the config file with your own parameters, you can use packer to build this VM with the following command:
 
 ```
-packer build centos-7.json
+$GOPATH/bin/packer build ./examples/centos-7.json
 ```
 
 ## CentOS 7 Builder from running VM Example
@@ -139,7 +147,7 @@ A brief explanation of what the config parameters mean:
 Once you've updated the config file with your own parameters, you can use packer to build this VM with the following command:
 
 ```
-packer build centos-7vm.json
+$GOPATH/bin/packer build ./examples/centos-7vm.json
 ```
 
 
@@ -174,7 +182,7 @@ A brief explanation of what the config parameters mean:
 Once you've updated the config file with your own parameters, you can use packer to build this VM, and upload it to your CloudStack instance with the following command:
 
 ```
-packer build centos-7acs.json
+$GOPATH/bin/packer build ./examples/centos-7acs.json
 ```
 
 
