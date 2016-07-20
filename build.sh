@@ -17,6 +17,9 @@ rm -rf pkg/*
 rm -rf ${GOPATH}/pkg/*
 mkdir -p bin/
 
+# Install gox, if not already present
+go get github.com/mitchellh/gox
+
 gox \
     -os="${XC_OS}" \
     -arch="${XC_ARCH}" \

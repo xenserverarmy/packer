@@ -10,7 +10,6 @@
         "<tab> text ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/centos6-ks.cfg<enter><wait>"
       ],
       "boot_wait": "10s",
-      "disk_size": 40960,
       "http_directory": "http",
       "iso_checksum": "4ed6c56d365bd3ab12cd88b8a480f4a62e7c66d2",
       "iso_checksum_type": "sha1",
@@ -21,7 +20,10 @@
       "ssh_password": "vmpassword",
       "ssh_wait_timeout": "10000s",
       "vm_name": "packer-centos-6.6-x86_64",
-      "vm_description": "Build time: {{isotime}}"
+      "vm_description": "Build time: {{isotime}}",
+      "vm_disks": [
+        ["rootvol", "40000"]
+      ]
     }
   ],
 
