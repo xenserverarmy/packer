@@ -84,7 +84,7 @@ A brief explanation of what the config parameters mean:
  * `remote_password` - the password for the XenServer host being used.
  * `boot_command` - a list of commands to be sent to the instance over XenServer VNC connection to VM.
  * `boot_wait` - how long to wait for the VM isntance to initially start
- * `disk_size` - the size of the disk the VM should be created with, in MB.
+ * `disk_size` - the size of the disk the VM should be created with, in MB. If present, this takes precedence and overrides vm_disks (for backwards compatibility)
  * `iso_url` - the url from which to download the ISO and place it in the iso_sr
  * `iso_name` - the name of the ISO visible on a ISO SR connected to the XenServer host, or the name to assign to it upon download.
  * `iso_sr` - the name of the ISO SR a downloaded ISO should be placed in
@@ -98,6 +98,7 @@ A brief explanation of what the config parameters mean:
  * `vm_name` - the name that should be given to the created VM.
  * `vm_memory` - the static memory configuration for the VM, in MB.
  * `vm_vcpus` - the number of vCPUs to assign during build
+ * `vm_disks` - a nested array of disk name: capacity pairs. Allows creating more than one virtual disk, and assigning each a name. If disk_size is also present, it takes priority and this setting is completely ignored. Using arrays enforces drive creation order, which can be very important for matching up to device names in Kickstart scripts, for example.
  * `nfs_mount` - Used for VHD artifacts, the NFS mount for the sr_name
 
 Once you've updated the config file with your own parameters, you can use packer to build this VM with the following command:

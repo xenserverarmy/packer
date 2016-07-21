@@ -2,6 +2,7 @@ package iso
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/mitchellh/multistep"
 	"github.com/mitchellh/packer/packer"
@@ -10,7 +11,7 @@ import (
 
 type stepCreateInstance struct {
 	instance *xsclient.VM
-	vdi      *xsclient.VDI
+	vdi      []*xsclient.VDI
 }
 
 func (self *stepCreateInstance) Run(state multistep.StateBag) multistep.StepAction {
@@ -88,19 +89,24 @@ func (self *stepCreateInstance) Run(state multistep.StateBag) multistep.StepActi
 		return multistep.ActionHalt
 	}
 
-	vdi, err := sr.CreateVdi("Packer-disk", int64(config.DiskSize*1024*1024))
-	if err != nil {
-		ui.Error(fmt.Sprintf("Unable to create packer disk VDI: %s", err.Error()))
-		return multistep.ActionHalt
-	}
-	self.vdi = vdi
+	// Iterate over the nested slices of disk names and sizes provided, creating each pair
+	for _, values := range config.VMDisks {
+		diskname := values[0]
+		disksize, _ := strconv.Atoi(values[1])
+		ui.Say(fmt.Sprintf("Creating disk %s: %dMB", diskname, disksize))
+		vdi, err := sr.CreateVdi(diskname, int64(disksize*1024*1024))
+		if err != nil {
+			ui.Error(fmt.Sprintf("Unable to create packer disk VDI: %s", err.Error()))
+			return multistep.ActionHalt
+		}
+		self.vdi = append(self.vdi, vdi)
 
-	err = instance.ConnectVdi(vdi, xsclient.Disk, "")
-	if err != nil {
-		ui.Error(fmt.Sprintf("Unable to connect packer disk VDI: %s", err.Error()))
-		return multistep.ActionHalt
+		err = instance.ConnectVdi(vdi, xsclient.Disk, "")
+		if err != nil {
+			ui.Error(fmt.Sprintf("Unable to connect packer disk VDI: %s", err.Error()))
+			return multistep.ActionHalt
+		}
 	}
-
 	// Connect Network
 
 	var network *xsclient.Network
@@ -185,14 +191,16 @@ func (self *stepCreateInstance) Run(state multistep.StateBag) multistep.StepActi
 
 	state.Put("virtualization_type", bootPolicy)
 
-	vdiId, err := vdi.GetUuid()
-	if err != nil {
-		ui.Error(fmt.Sprintf("Unable to get VM VDI UUID: %s", err.Error()))
-		return multistep.ActionHalt
-	}
+	for index, vdis := range self.vdi {
+		vdiId, err := vdis.GetUuid()
+		if err != nil {
+			ui.Error(fmt.Sprintf("Unable to get VM VDI UUID: %s", err.Error()))
+			return multistep.ActionHalt
+		}
 
-	state.Put("instance_vdi_uuid", vdiId)
-	ui.Say(fmt.Sprintf("Attached vdi '%s'", vdiId))
+		state.Put(fmt.Sprintf("instance_vdi_uuid_%d", index), vdiId)
+		ui.Say(fmt.Sprintf("Attached vdi '%s'", vdiId))
+	}
 
 	srId, err := sr.GetUuid()
 	if err != nil {
@@ -202,7 +210,6 @@ func (self *stepCreateInstance) Run(state multistep.StateBag) multistep.StepActi
 
 	state.Put("instance_sr_uuid", srId)
 	ui.Say(fmt.Sprintf("Using SR '%s'", srId))
-
 
 	return multistep.ActionContinue
 }
@@ -224,11 +231,14 @@ func (self *stepCreateInstance) Cleanup(state multistep.StateBag) {
 		}
 	}
 
+	// Destroy any VDI's we have created
 	if self.vdi != nil {
-		ui.Say("Destroying VDI")
-		err := self.vdi.Destroy()
-		if err != nil {
-			ui.Error(err.Error())
+		ui.Say("Destroying VDI's")
+		for _, vdis := range self.vdi {
+			err := vdis.Destroy()
+			if err != nil {
+				ui.Error(err.Error())
+			}
 		}
 	}
 }
