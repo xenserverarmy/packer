@@ -100,6 +100,7 @@ A brief explanation of what the config parameters mean:
  * `vm_vcpus` - the number of vCPUs to assign during build
  * `vm_disks` - a nested array of disk name: capacity pairs. Allows creating more than one virtual disk, and assigning each a name. If disk_size is also present, it takes priority and this setting is completely ignored. Using arrays enforces drive creation order, which can be very important for matching up to device names in Kickstart scripts, for example.
  * `nfs_mount` - Used for VHD artifacts, the NFS mount for the sr_name
+ * `convert_to_template` - Convert the VM to a Template before final export. Boolean.
 
 Once you've updated the config file with your own parameters, you can use packer to build this VM with the following command:
 
@@ -144,6 +145,7 @@ A brief explanation of what the config parameters mean:
  * `vm_name` - the name that should be given to the created VM.
  * `source_vm` - the name of the VM to clone and operate on
  * `nfs_mount` - Used for VHD artifacts, the NFS mount for the sr_name
+ * `convert_to_template` - Convert the VM to a Template before final export. Boolean.
 
 Once you've updated the config file with your own parameters, you can use packer to build this VM with the following command:
 

@@ -10,7 +10,9 @@
         "<tab><end> ks=http://10.204.137.80/ks/centos7-ks.cfg<enter><wait>"
       ],
       "boot_wait": "10s",
-      "disk_size": 40960,
+      "vm_disks": [
+        ["rootvol", "40000"]
+      ],
       "http_directory": "/var/www/html/packer",
       "iso_url": "http://mirrors.seas.harvard.edu/centos/7/isos/x86_64/CentOS-7-x86_64-Minimal-1503-01.iso",
       "iso_name": "CentOS-7-x86_64-Minimal-1503-01.iso",
@@ -26,7 +28,8 @@
       "vm_name": "packer-centos-7-x86_64-acs-minimal-template",
       "vm_memory": "8192",
       "vm_vcpus": 1,
-      "nfs_mount": "10.204.136.41:/vol/exports/packer"
+      "nfs_mount": "10.204.136.41:/vol/exports/packer",
+      "convert_to_template": false
     }
   ],
 

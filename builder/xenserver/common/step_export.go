@@ -87,7 +87,7 @@ func (self *StepExport) Run(state multistep.StateBag) multistep.StepAction {
 	suffix := ".vhd"
 	extrauri := "&format=vhd"
 
-	exportFiles := make([]string, 0, 1) 
+	exportFiles := make([]string, 0, 1)
 
 	instance, err := client.GetVMByUuid(instance_uuid)
 	if err != nil {
@@ -107,6 +107,22 @@ func (self *StepExport) Run(state multistep.StateBag) multistep.StepAction {
 		return multistep.ActionContinue
 
 	case "vhd":
+		// Before exporting, convert it to a template (if requested)
+		// If a template, we assume all VIFs should be removed at export time,
+		// to make it more generic and reusable
+		if config.ConvertToTemplate {
+			ui.Say("Converting VM to template before export")
+			err = instance.SetIsATemplate(true)
+			if err != nil {
+				ui.Error(fmt.Sprintf("Error converting VM to a template prior to export: %s", err.Error()))
+				return multistep.ActionHalt
+			}
+			vifs, _ := instance.GetVIFs()
+			for _, vif := range vifs {
+				ui.Say("Destroying VM network interfaces for template export")
+				vif.Destroy()
+			}
+		}
 
 		disks, err := instance.GetDisks()
 		if err != nil {
@@ -145,14 +161,28 @@ func (self *StepExport) Run(state multistep.StateBag) multistep.StepAction {
 				return multistep.ActionHalt
 			}
 
-			exportFiles = append(exportFiles , export_filename)
-		
+			exportFiles = append(exportFiles, export_filename)
+
 			dst.Close()
 		}
 
 	case "xva":
-		// export the VM
-
+		// Before exporting, convert it to a template (if requested)
+		// If a template, we assume all VIFs should be removed at export time,
+		// to make it more generic and reusable
+		if config.ConvertToTemplate {
+			ui.Say("Converting VM to template before export")
+			err = instance.SetIsATemplate(true)
+			if err != nil {
+				ui.Error(fmt.Sprintf("Error converting VM to a template prior to export: %s", err.Error()))
+				return multistep.ActionHalt
+			}
+			vifs, _ := instance.GetVIFs()
+			for _, vif := range vifs {
+				ui.Say("Destroying VM network interfaces for template export")
+				vif.Destroy()
+			}
+		}
 		export_url := fmt.Sprintf("https://%s/export?uuid=%s&session_id=%s",
 			client.Host,
 			instance_uuid,
@@ -168,15 +198,29 @@ func (self *StepExport) Run(state multistep.StateBag) multistep.StepAction {
 			return multistep.ActionHalt
 		}
 
-		exportFiles = append(exportFiles , export_filename)
+		exportFiles = append(exportFiles, export_filename)
 
 	case "vdi_raw":
 		suffix = ".raw"
 		extrauri = ""
 		fallthrough
 	case "vdi_vhd":
-		// export the disks
-
+		// Before exporting, convert it to a template (if requested)
+		// If a template, we assume all VIFs should be removed at export time,
+		// to make it more generic and reusable
+		if config.ConvertToTemplate {
+			ui.Say("Converting VM to template before export")
+			err = instance.SetIsATemplate(true)
+			if err != nil {
+				ui.Error(fmt.Sprintf("Error converting VM to a template prior to export: %s", err.Error()))
+				return multistep.ActionHalt
+			}
+			vifs, _ := instance.GetVIFs()
+			for _, vif := range vifs {
+				ui.Say("Destroying VM network interfaces for template export")
+				vif.Destroy()
+			}
+		}
 		disks, err := instance.GetDisks()
 		if err != nil {
 			ui.Error(fmt.Sprintf("Could not get VM disks: %s", err.Error()))
@@ -233,7 +277,6 @@ func (self *StepExport) Run(state multistep.StateBag) multistep.StepAction {
 
 			}
 
-
 			disk_export_filename := fmt.Sprintf("%s/%s%s", config.OutputDir, disk_uuid, suffix)
 
 			ui.Say("Getting VDI " + disk_export_url)
@@ -249,7 +292,7 @@ func (self *StepExport) Run(state multistep.StateBag) multistep.StepAction {
 		}
 
 	default:
-		panic(fmt.Sprintf("Unknown export format '%s'", self.OutputFormat ))
+		panic(fmt.Sprintf("Unknown export format '%s'", self.OutputFormat))
 	}
 
 	state.Put("export_files", exportFiles)
