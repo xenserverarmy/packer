@@ -23,7 +23,8 @@
       "vm_description": "Build time: {{isotime}}",
       "vm_disks": [
         ["rootvol", "40000"]
-      ]
+      ],
+      "convert_to_template": false
     }
   ],
 
